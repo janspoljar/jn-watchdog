@@ -3,6 +3,8 @@ scraper.py - Scraper za javna narocila z ejn.gov.si
 Pobira narocila, jih kategorizira in shrani v SQLite bazo.
 """
 
+import re
+import time
 import requests
 from bs4 import BeautifulSoup
 import logging
@@ -15,9 +17,24 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 EJN_BASE_URL = "https://ejn.gov.si"
-EJN_SEARCH_URL = (
-    "https://ejn.gov.si/ponudnik/pages/aktualno/aktualno_javno_narocilo_searching.zul"
-)
+
+# JSF stran z aktualnimi javnimi naročili in ID-ji form/table komponent
+BASE_URL = "https://ejn.gov.si/ponudba/pages/aktualno/aktualna_javna_narocila.xhtml"
+FORM_ID = "iskalnik_aktualnih_jn_data_table_form"
+TABLE_ID = f"{FORM_ID}:iskalnik_aktualnih_jn_data_table:iskalnik_aktualnih_jn_data_table"
+
+HEADERS_GET = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "sl,en-US;q=0.7,en;q=0.3",
+}
+
+HEADERS_POST = {
+    **HEADERS_GET,
+    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+    "X-Requested-With": "XMLHttpRequest",
+    "Referer": BASE_URL,
+}
 
 # ---------------------------------------------------------------------------
 # Keyword kategorizer
@@ -115,100 +132,110 @@ def kategorize(naziv: str) -> list:
 # Scraping
 # ---------------------------------------------------------------------------
 
-def poberi_narocila(max_strani: int = 10) -> list:
+def poberi_narocila(max_strani: int = 33) -> list:
     """
     Scrapa seznam javnih narocil z ejn.gov.si.
-
-    Stolpci v tabeli (0-indeks):
-        [0] PJN  [1] Naziv  [2] Narocnik  [3] Vrsta  [4] Datum objave
-        [5] Stanje  [6] Tip  [7] Rok za oddajo ponudbe
+    Prva stran gre prek GET, naslednje prek JSF AJAX POST paginacije
+    (javax.faces partial requests z ViewState).
 
     Returns:
         Seznam narocil kot slovarjev, ze s poljem 'kategorije'.
     """
+    session = requests.Session()
+
+    # Prva stran GET — iz nje poberemo tudi ViewState za paginacijo
+    r = session.get(BASE_URL, headers=HEADERS_GET)
+    soup = BeautifulSoup(r.text, "html.parser")
+    viewstate = soup.find("input", {"name": "javax.faces.ViewState"})["value"]
+
     narocila = []
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        )
-    }
+    videni_pjn = set()
 
-    for stran in range(1, max_strani + 1):
-        logger.info(f"Scrapam stran {stran}/{max_strani}...")
-        try:
-            response = requests.get(
-                EJN_SEARCH_URL,
-                headers=headers,
-                params={"page": stran},
-                timeout=30,
-            )
-            response.raise_for_status()
-        except requests.RequestException as e:
-            logger.error(f"Napaka pri prenosu strani {stran}: {e}")
+    # Poberi prvo stran
+    for n in _razcleni_tabelo(r.text):
+        if n["pjn"] not in videni_pjn:
+            narocila.append(n)
+            videni_pjn.add(n["pjn"])
+
+    logger.info(f"Stran 1: {len(narocila)} naročil")
+
+    # Paginacija POST — JSF partial AJAX request za vsako naslednjo stran
+    for stran in range(1, max_strani):
+        post_data = {
+            "javax.faces.partial.ajax": "true",
+            "javax.faces.source": TABLE_ID,
+            "javax.faces.partial.execute": TABLE_ID,
+            "javax.faces.partial.render": TABLE_ID,
+            "javax.faces.behavior.event": "page",
+            "javax.faces.partial.event": "page",
+            f"{TABLE_ID}_pagination": "true",
+            f"{TABLE_ID}_first": str(stran * 50),
+            f"{TABLE_ID}_rows": "50",
+            f"{TABLE_ID}_skipChildren": "true",
+            f"{TABLE_ID}_encodeFeature": "true",
+            FORM_ID: FORM_ID,
+            f"{TABLE_ID}_rppDD": "50",
+            "javax.faces.ViewState": viewstate,
+        }
+
+        r = session.post(BASE_URL, headers=HEADERS_POST, data=post_data)
+
+        # Posodobi ViewState iz XML odgovora
+        xml_soup = BeautifulSoup(r.text, "lxml-xml")
+        new_vs = xml_soup.find("update", {"id": re.compile("ViewState")})
+        if new_vs:
+            viewstate = new_vs.text.strip()
+
+        # Izvleči HTML chunk s tabelo
+        html_chunk = xml_soup.find("update", {"id": TABLE_ID})
+        if not html_chunk:
             break
 
-        soup = BeautifulSoup(response.text, "lxml")
-        # EJN portal uporablja ZK framework - tabela z narocili
-        vrstice = soup.select("table.z-listbox-body tr, tr.z-row, tr[data-pjn]")
-        if not vrstice:
-            vrstice = soup.find_all("tr", class_=lambda c: c and "row" in c.lower())
-        if not vrstice:
-            logger.info(f"Stran {stran}: ni vrstic, konec paginacije.")
+        nova = _razcleni_tabelo(html_chunk.text)
+        novi = [n for n in nova if n["pjn"] not in videni_pjn]
+
+        if not novi:
             break
 
-        nova_na_strani = 0
-        for vrstica in vrstice:
-            narocilo = _razcleni_vrstico(vrstica)
-            if narocilo:
-                narocila.append(narocilo)
-                nova_na_strani += 1
+        for n in novi:
+            narocila.append(n)
+            videni_pjn.add(n["pjn"])
 
-        logger.info(f"Stran {stran}: razclenjenih {nova_na_strani} narocil.")
-        if nova_na_strani == 0:
-            break
+        logger.info(f"Stran {stran+1}: {len(novi)} novih (skupaj: {len(narocila)})")
+        time.sleep(0.3)  # Bodi prijazen do strežnika
 
-    logger.info(f"Skupaj pobranih narocil: {len(narocila)}")
     return narocila
 
 
-def _razcleni_vrstico(vrstica) -> dict | None:
+def _razcleni_tabelo(html_text: str) -> list:
     """
-    Razcleni eno <tr> vrstico tabele v slovar narocila.
+    Razcleni HTML tabelo naročil (vrstice z atributom data-ri) v seznam slovarjev.
 
-    Vrne None za header vrstice in vrstice z premalo celicami.
+    Stolpci (0-indeks): [0] Naročnik [1] Naziv [3] Vrsta [5] PJN
+                        [6] Datum objave [7] Rok oddaje [9] Stanje
     """
-    try:
-        celice = vrstica.find_all(["td", "th"])
-        if len(celice) < 5 or celice[0].name == "th":
-            return None
-
-        def cel(i: int) -> str:
-            return celice[i].get_text(separator=" ", strip=True) if i < len(celice) else ""
-
-        pjn = cel(0)
-        naziv = cel(1)
-        if not pjn or not naziv:
-            return None
-
-        return {
-            "pjn": pjn,
-            "naziv": naziv,
-            "narocnik": cel(2),
-            "vrsta": cel(3),
-            "datum_objave": cel(4),
-            "stanje": cel(5),
-            "rok_oddaje": cel(7),  # stolpec [7] — rok za oddajo ponudbe
-            "kategorije": kategorize(naziv),
-            "datum_scrape": datetime.now().isoformat(),
-        }
-    except Exception as e:
-        logger.debug(f"Napaka pri razclenjvanju vrstice: {e}")
-        return None
+    soup = BeautifulSoup(html_text, "html.parser")
+    rows = soup.select("tr[data-ri]")
+    narocila = []
+    for row in rows:
+        cols = row.find_all("td")
+        if len(cols) == 10:
+            naziv = cols[1].get_text(strip=True)
+            narocila.append({
+                "pjn":          cols[5].get_text(strip=True),
+                "narocnik":     cols[0].get_text(strip=True),
+                "naziv":        naziv,
+                "vrsta":        cols[3].get_text(strip=True),
+                "datum_objave": cols[6].get_text(strip=True),
+                "rok_oddaje":   cols[7].get_text(strip=True),
+                "stanje":       cols[9].get_text(strip=True),
+                "kategorije":   kategorize(naziv),
+                "datum_scrape": datetime.now().isoformat(),
+            })
+    return narocila
 
 
-def scrape_in_shrani(max_strani: int = 10) -> int:
+def scrape_in_shrani(max_strani: int = 33) -> int:
     """Pozeni scraping in shrani v bazo. Vrne stevilo novih narocil."""
     narocila = poberi_narocila(max_strani=max_strani)
     if not narocila:
