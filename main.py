@@ -6,6 +6,7 @@ Zagon:
     python main.py            # inicializira bazo + scheduler (vsak dan ob 06:00)
     python main.py --test     # požene dnevni job takoj enkrat
     python main.py --server   # zažene samo Flask API strežnik
+    python main.py --test --dry-run   # job brez pošiljanja: emaili v datoteko
 """
 
 import sys
@@ -124,6 +125,11 @@ def zazeni_scheduler():
 
 
 if __name__ == "__main__":
+    # Dry-run: emaili gredo v datoteko (emailer.DRY_RUN_FILE) namesto na Resend
+    if "--dry-run" in sys.argv:
+        emailer.DRY_RUN = True
+        logger.info(f"DRY-RUN mode: emaili se zapisujejo v {emailer.DRY_RUN_FILE}")
+
     if "--test" in sys.argv:
         # Testni zagon — požene job takoj enkrat
         dnevni_job()

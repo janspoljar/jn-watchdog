@@ -3,6 +3,7 @@ emailer.py — Pošiljanje email alertov prek Resend API.
 Grupira naročila po kategorijah in pošlje HTML email naročniku.
 """
 
+import os
 import logging
 from datetime import datetime
 from collections import defaultdict
@@ -15,6 +16,25 @@ logger = logging.getLogger(__name__)
 
 # Inicializiraj Resend klient
 resend.api_key = config.RESEND_API_KEY
+
+# Dry-run mode: emaili se NE pošljejo prek Resend, ampak zapišejo v datoteko.
+# Vklop: main.py --dry-run (nastavi emailer.DRY_RUN = True).
+DRY_RUN = False
+DRY_RUN_FILE = os.getenv("DRY_RUN_FILE", "dry_run_emaili.txt")
+
+
+def _zapisi_dry_run(prejemnik: str, zadeva: str, html: str):
+    """Zapiše email v dry-run datoteko namesto pošiljanja."""
+    with open(DRY_RUN_FILE, "a", encoding="utf-8") as f:
+        f.write(
+            f"\n{'=' * 70}\n"
+            f"DRY-RUN | {datetime.now().isoformat()}\n"
+            f"TO:      {prejemnik}\n"
+            f"SUBJECT: {zadeva}\n"
+            f"{'=' * 70}\n"
+            f"{html}\n"
+        )
+    logger.info(f"[DRY-RUN] Email za {prejemnik} zapisan v {DRY_RUN_FILE}")
 
 # Ikone za posamezne kategorije (za prikaz v emailu)
 KATEGORIJE_IKONE = {
@@ -130,6 +150,10 @@ def pošlji_email(uporabnik_email: str, narocila: list) -> bool:
     danes = datetime.now().strftime("%d. %m. %Y")
     html = _sestavi_html(uporabnik_email, narocila)
 
+    if DRY_RUN:
+        _zapisi_dry_run(uporabnik_email, f"📋 {len(narocila)} novih javnih naročil — {danes}", html)
+        return True
+
     try:
         odgovor = resend.Emails.send({
             "from": config.FROM_EMAIL,
@@ -146,6 +170,10 @@ def pošlji_email(uporabnik_email: str, narocila: list) -> bool:
 
 def _pošlji_admin(zadeva: str, html: str) -> bool:
     """Pošlje email adminu (config.ADMIN_EMAIL). Vrne True ob uspehu."""
+    if DRY_RUN:
+        _zapisi_dry_run(config.ADMIN_EMAIL, zadeva, html)
+        return True
+
     try:
         resend.Emails.send({
             "from": config.FROM_EMAIL,
