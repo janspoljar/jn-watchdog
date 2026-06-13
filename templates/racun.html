@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block naslov %}Moj račun — javna-narocila.si{% endblock %}
+
+{% block vsebina %}
+<section>
+<div class="ovoj">
+
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+        <div>
+            <h1 style="font-size:32px; margin-bottom:4px;">Moj račun</h1>
+            <p class="drobno" style="margin:0;">{{ uporabnik.email }} · paket: <strong>{{ uporabnik.paket or 'osnovni' }}</strong></p>
+        </div>
+        <a href="/odjava-seje" class="gumb obroba mini">Odjava</a>
+    </div>
+
+    <h2 style="font-size:24px; margin-top:36px;">Vaši profili dejavnosti</h2>
+    <p class="drobno">Profilov: {{ profili|length }}{% if meja %} / {{ meja }}{% else %} (neomejeno){% endif %}</p>
+
+    {% if profili %}
+    <div class="mreza-3" style="margin-top:12px;">
+        {% for p in profili %}
+        <div class="karta">
+            <h3>{{ panoge[p.panoga].ime if p.panoga in panoge else (p.panoga or 'Profil') }}</h3>
+            {% if p.izbrani %}
+            <div class="znak-vrsta">
+                {% for z in p.izbrani %}<span class="znak">{{ z }}</span>{% endfor %}
+            </div>
+            {% endif %}
+            {% if p.opis %}<p class="drobno" style="margin-top:10px;">{{ p.opis }}</p>{% endif %}
+            <form method="post" action="/racun/izbrisi" style="margin-top:14px;">
+                <input type="hidden" name="profil_id" value="{{ p.id }}">
+                <button type="submit" class="gumb obroba mini">Odstrani</button>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p>Nimate še nobenega profila. Dodajte prvega spodaj.</p>
+    {% endif %}
+
+    {% if lahko_doda %}
+    <h2 style="font-size:24px; margin-top:40px;">Dodaj profil</h2>
+    <form method="post" action="/racun/profil" style="max-width:680px; margin-top:12px;">
+        <div class="polje">
+            <label for="panoga">Panoga</label>
+            <select name="panoga" id="panoga" required>
+                <option value="" disabled selected>— izberite panogo —</option>
+                {% for kljuc, p in panoge.items() %}
+                <option value="{{ kljuc }}">{{ p.ime }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="polje">
+            <label>Kaj vse počnete? <span class="drobno">(odkljukate vse, kar velja)</span></label>
+            {% for kljuc, p in panoge.items() %}
+            <div class="chipi predlogi" data-panoga="{{ kljuc }}" style="display:none;">
+                {% if p.predlogi %}
+                    {% for pred in p.predlogi %}
+                    <label class="chip"><input type="checkbox" name="izbrani" value="{{ pred.label }}"> {{ pred.label }}</label>
+                    {% endfor %}
+                {% else %}
+                    <p class="drobno">Opišite dejavnost spodaj.</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+            <p class="drobno" id="namig" style="margin-top:8px;">Najprej izberite panogo zgoraj.</p>
+        </div>
+
+        <div class="polje">
+            <label for="opis">Še karkoli dodatnega? <span class="drobno">(neobvezno)</span></label>
+            <textarea name="opis" id="opis" placeholder="Npr. specializirani smo tudi za sanacije fasad ..."></textarea>
+        </div>
+
+        <button type="submit" class="gumb">Dodaj profil</button>
+    </form>
+    <script>
+        (function () {
+            var izbira = document.getElementById('panoga');
+            var skupine = document.querySelectorAll('.predlogi');
+            var namig = document.getElementById('namig');
+            function osvezi() {
+                var izbran = izbira.value;
+                skupine.forEach(function (s) {
+                    s.style.display = (s.dataset.panoga === izbran) ? 'flex' : 'none';
+                });
+                namig.style.display = izbran ? 'none' : 'block';
+            }
+            izbira.addEventListener('change', osvezi);
+            osvezi();
+        })();
+    </script>
+    {% else %}
+    <p class="drobno" style="margin-top:24px;">
+        Dosegli ste mejo profilov za svoj paket{% if meja %} ({{ meja }}){% endif %}.
+        Za več profilov nadgradite paket.
+    </p>
+    {% endif %}
+
+</div>
+</section>
+{% endblock %}

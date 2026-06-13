@@ -53,3 +53,11 @@ MATCH_MAX_NA_ZAGON = int(os.getenv("MATCH_MAX_NA_ZAGON", "2000"))
 
 # Časovna cona za urnik pošiljanja (Osnovni/Pro/Business).
 TIMEZONE = os.getenv("TZ", "Europe/Ljubljana")
+
+# --- Uporabniški računi / prijava brez gesla (magic link) ---
+# Ključ za podpisovanje sej (Flask). V produkciji OBVEZNO nastavi v .env.
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-nevarno-zamenjaj-v-produkciji")
+# Veljavnost prijavne povezave v minutah.
+PRIJAVA_VELJAVNOST_MIN = int(os.getenv("PRIJAVA_VELJAVNOST_MIN", "30"))
+# Največ profilov po paketu (None = neomejeno).
+PAKET_MEJA_PROFILOV = {"osnovni": 1, "pro": 3, "business": None}

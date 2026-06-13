@@ -11,7 +11,7 @@
         prihajati takoj.
     </p>
 
-    {% if napaka %}<div class="opozorilo" style="margin-top:24px;">{{ napaka }}</div>{% endif %}
+    {% if napaka %}<div class="opozorilo" style="margin-top:24px;">{{ napaka }}{% if ze_registriran %} <a href="/prijava" style="font-weight:600;">Prijava »</a>{% endif %}</div>{% endif %}
 
     <form method="post" action="/registracija" style="margin-top:28px;">
         <div class="polje">

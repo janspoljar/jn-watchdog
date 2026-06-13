@@ -14,7 +14,9 @@ import sqlite3
 import logging
 
 import stripe
-from flask import Flask, request, jsonify, render_template
+from datetime import timedelta
+
+from flask import Flask, request, jsonify, render_template, redirect, session
 from flask_cors import CORS
 
 import config
@@ -27,6 +29,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+app.secret_key = config.SECRET_KEY
+app.permanent_session_lifetime = timedelta(days=30)
 CORS(app)  # Omogoči CORS za vse origine
 
 # Inicializiraj bazo ob importu — gunicorn ne izvede __main__ bloka,
@@ -157,6 +161,15 @@ def registracija():
             napaka=napaka, email=email, panoga=panoga_key, opis=opis, paket=paket,
         ), 400
 
+    # Varovalo: že registriran in potrjen uporabnik naj se raje prijavi.
+    obstojec = db.poberi_uporabnik_po_emailu(email)
+    if obstojec and obstojec.get("aktiven"):
+        return render_template(
+            "registracija_form.html", panoge=panoge.PANOGE, paketi=PAKETI,
+            napaka="Ta email je že registriran. Prijavite se v svoj račun.",
+            ze_registriran=True, email=email, panoga=panoga_key, opis=opis, paket=paket,
+        ), 400
+
     # Kategorije za dnevni job (beta — keyword filter; AI matching v Fazi 3)
     kategorije = panoge.kategorije_za_panogo(panoga_key)
     token = secrets.token_urlsafe(32)
@@ -183,6 +196,100 @@ def potrditev():
 def zasebnost():
     """Politika zasebnosti (GDPR)."""
     return render_template("zasebnost.html")
+
+
+# ---------------------------------------------------------------------------
+# Prijava brez gesla (magic link) + nadzorna plošča (Faza 4.5)
+# ---------------------------------------------------------------------------
+
+@app.route("/prijava", methods=["GET", "POST"])
+def prijava():
+    """Vpis emaila -> pošlje prijavno povezavo (če račun obstaja)."""
+    if request.method == "GET":
+        return render_template("prijava.html")
+
+    email = (request.form.get("email") or "").strip().lower()
+    if email and EMAIL_REGEX.match(email):
+        u = db.poberi_uporabnik_po_emailu(email)
+        if u:
+            token = db.ustvari_prijavni_zeton(u["id"])
+            emailer.pošlji_prijavni_link(email, f"{config.BASE_URL}/racun?token={token}")
+            logger.info(f"Prijavna povezava poslana: {email}")
+    # Vedno enak odgovor — ne razkrivamo, ali email obstaja.
+    return render_template("prijava_oddano.html", email=email)
+
+
+@app.route("/racun", methods=["GET"])
+def racun():
+    """Nadzorna plošča. Token v URL prijavi; sicer zahteva sejo."""
+    token = (request.args.get("token") or "").strip()
+    if token:
+        uid = db.unovci_prijavni_zeton(token)
+        if uid:
+            session.permanent = True
+            session["uid"] = uid
+            return redirect("/racun")
+        return render_template(
+            "prijava.html",
+            napaka="Povezava ni veljavna ali je potekla. Vpišite email za novo.",
+        ), 400
+
+    uid = session.get("uid")
+    if not uid:
+        return redirect("/prijava")
+    uporabnik = db.poberi_uporabnika(uid)
+    if not uporabnik:
+        session.clear()
+        return redirect("/prijava")
+
+    profili = db.poberi_profile_uporabnika(uid)
+    meja = config.PAKET_MEJA_PROFILOV.get(uporabnik.get("paket") or "osnovni", 1)
+    lahko_doda = (meja is None) or (len(profili) < meja)
+    return render_template(
+        "racun.html", uporabnik=uporabnik, profili=profili,
+        panoge=panoge.PANOGE, meja=meja, lahko_doda=lahko_doda,
+    )
+
+
+@app.route("/racun/profil", methods=["POST"])
+def racun_dodaj_profil():
+    """Doda nov profil (do meje paketa)."""
+    uid = session.get("uid")
+    if not uid:
+        return redirect("/prijava")
+    uporabnik = db.poberi_uporabnika(uid)
+    meja = config.PAKET_MEJA_PROFILOV.get(uporabnik.get("paket") or "osnovni", 1)
+    if meja is not None and db.aktivnih_profilov(uid) >= meja:
+        return redirect("/racun")  # meja dosežena — tiho ignoriraj
+
+    panoga_key = (request.form.get("panoga") or "").strip()
+    izbrani = request.form.getlist("izbrani")
+    opis = (request.form.get("opis") or "").strip()
+    if panoga_key in panoge.PANOGE:
+        db.dodaj_profil(uid, panoga_key, opis, izbrani)
+    return redirect("/racun")
+
+
+@app.route("/racun/izbrisi", methods=["POST"])
+def racun_izbrisi_profil():
+    """Soft-izbris (deaktivacija) profila uporabnika."""
+    uid = session.get("uid")
+    if not uid:
+        return redirect("/prijava")
+    try:
+        pid = int(request.form.get("profil_id") or 0)
+    except ValueError:
+        pid = 0
+    if pid:
+        db.izbrisi_profil(pid, uid)
+    return redirect("/racun")
+
+
+@app.route("/odjava-seje", methods=["GET"])
+def odjava_seje():
+    """Odjava iz seje (logout)."""
+    session.clear()
+    return redirect("/")
 
 
 # ---------------------------------------------------------------------------

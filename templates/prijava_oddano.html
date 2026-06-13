@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block naslov %}Prijavna povezava poslana — javna-narocila.si{% endblock %}
+
+{% block vsebina %}
+<section>
+<div class="ovoj">
+    <div class="kartica sredina ozko" style="margin:0 auto;">
+        <h1 style="font-size:30px;">Preverite email</h1>
+        <p class="vodilo" style="margin:0 auto 8px;">
+            Če za <strong>{{ email }}</strong> obstaja račun, smo poslali povezavo za
+            prijavo. Odprite jo in ste v svojem računu. Povezava velja omejen čas.
+        </p>
+        <p class="drobno">Ne vidite emaila? Preverite mapo z neželeno pošto.</p>
+    </div>
+</div>
+</section>
+{% endblock %}

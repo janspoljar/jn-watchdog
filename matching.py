@@ -23,6 +23,11 @@ import db
 
 logger = logging.getLogger(__name__)
 
+
+class PrekiniMatching(Exception):
+    """Kritična napaka (npr. neveljaven API ključ) — ustavi celoten matching."""
+
+
 SISTEM = (
     "Si pomočnik, ki za slovensko podjetje ocenjuje ustreznost javnih naročil. "
     "Za vsako naročilo presodi, ali je relevantno za podjetje glede na opis "
@@ -118,6 +123,9 @@ def _klici_model(opis_profila: str, narocila: list) -> list:
             blok.text for blok in odgovor.content if getattr(blok, "type", "") == "text"
         )
         return _razcleni_json(besedilo)
+    except anthropic.AuthenticationError as e:
+        # Neveljaven ključ — nima smisla poskušati z ostalimi profili.
+        raise PrekiniMatching(f"Neveljaven ANTHROPIC_API_KEY (401): {e}")
     except Exception as e:
         logger.error(f"Matching: napaka pri klicu modela: {e}")
         return []
@@ -182,21 +190,26 @@ def pozeni_matching(narocila: list) -> dict:
     limit = config.MATCH_MAX_NA_ZAGON
     presezen = False
 
-    for profil in profili:
-        ze = db.ze_ocenjeni_pjn_za_profil(profil["id"])
-        nova = [n for n in narocila if n.get("pjn") not in ze]
-        if not nova:
-            continue
-        # Varovalka stroškov — ne presezi limita ocen na zagon
-        if skupaj_ocen + len(nova) > limit:
-            nova = nova[: max(0, limit - skupaj_ocen)]
-            presezen = True
-        if not nova:
-            break
-        skupaj_ocen += oceni_profil(profil, nova)
-        if presezen:
-            logger.warning(f"Matching: dosežen limit {limit} ocen na zagon — ustavljam.")
-            break
+    try:
+        for profil in profili:
+            ze = db.ze_ocenjeni_pjn_za_profil(profil["id"])
+            nova = [n for n in narocila if n.get("pjn") not in ze]
+            if not nova:
+                continue
+            # Varovalka stroškov — ne presezi limita ocen na zagon
+            if skupaj_ocen + len(nova) > limit:
+                nova = nova[: max(0, limit - skupaj_ocen)]
+                presezen = True
+            if not nova:
+                break
+            skupaj_ocen += oceni_profil(profil, nova)
+            if presezen:
+                logger.warning(f"Matching: dosežen limit {limit} ocen na zagon — ustavljam.")
+                break
+    except PrekiniMatching as e:
+        logger.error(f"Matching prekinjen: {e}")
+        return {"profilov": len(profili), "ocen": skupaj_ocen,
+                "preskoceno_limit": presezen, "napaka": str(e)}
 
     logger.info(f"Matching končan: {len(profili)} profilov, {skupaj_ocen} ocen.")
     return {"profilov": len(profili), "ocen": skupaj_ocen, "preskoceno_limit": presezen}

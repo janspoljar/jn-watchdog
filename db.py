@@ -5,8 +5,10 @@ Vse operacije z naročili, uporabniki in email logi.
 
 import sqlite3
 import json
+import secrets
 import logging
 from datetime import datetime, timedelta
+import config
 from config import DB_PATH
 
 logger = logging.getLogger(__name__)
@@ -144,6 +146,16 @@ def init_db():
             pjn           TEXT    NOT NULL,
             datum         TEXT,
             PRIMARY KEY (uporabnik_id, pjn)
+        )
+    """)
+
+    # Prijavni žetoni za prijavo brez gesla (magic link).
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS prijavni_zetoni (
+            token         TEXT    PRIMARY KEY,
+            uporabnik_id  INTEGER NOT NULL,
+            poteklo       TEXT    NOT NULL,
+            datum         TEXT
         )
     """)
 
@@ -770,6 +782,122 @@ def oznaci_poslano_userju(uporabnik_id: int, pjn_lista: list):
     conn.commit()
     conn.close()
     logger.info(f"Označenih {len(pjn_lista)} naročil kot poslano uporabniku {uporabnik_id}.")
+
+
+# ---------------------------------------------------------------------------
+# Uporabniški računi / prijava brez gesla (magic link)
+# ---------------------------------------------------------------------------
+
+def poberi_uporabnika(uporabnik_id: int) -> dict | None:
+    """Vrne osnovne podatke uporabnika po ID, ali None."""
+    conn = _poveži()
+    conn.row_factory = sqlite3.Row
+    vrstica = conn.execute(
+        "SELECT id, email, paket, aktiven, potrjen FROM uporabniki WHERE id = ?",
+        (uporabnik_id,),
+    ).fetchone()
+    conn.close()
+    return dict(vrstica) if vrstica else None
+
+
+def poberi_uporabnik_po_emailu(email: str) -> dict | None:
+    """Vrne uporabnika po emailu, ali None."""
+    conn = _poveži()
+    vrstica = conn.execute(
+        "SELECT id, email, paket, aktiven, potrjen FROM uporabniki WHERE email = ?",
+        (email,),
+    ).fetchone()
+    conn.close()
+    return dict(vrstica) if vrstica else None
+
+
+def ustvari_prijavni_zeton(uporabnik_id: int) -> str:
+    """Ustvari enkratni prijavni žeton z veljavnostjo iz configa. Vrne token."""
+    token = secrets.token_urlsafe(32)
+    poteklo = (datetime.now() + timedelta(minutes=config.PRIJAVA_VELJAVNOST_MIN)).isoformat()
+    conn = _poveži()
+    conn.execute(
+        "INSERT INTO prijavni_zetoni (token, uporabnik_id, poteklo, datum) VALUES (?, ?, ?, ?)",
+        (token, uporabnik_id, poteklo, datetime.now().isoformat()),
+    )
+    conn.commit()
+    conn.close()
+    return token
+
+
+def unovci_prijavni_zeton(token: str) -> int | None:
+    """
+    Preveri in porabi prijavni žeton (enkratna uporaba). Vrne uporabnik_id ob
+    veljavnem, nepotečenem žetonu, sicer None. Žeton po uporabi izbriše.
+    """
+    if not token:
+        return None
+    conn = _poveži()
+    vrstica = conn.execute(
+        "SELECT uporabnik_id, poteklo FROM prijavni_zetoni WHERE token = ?", (token,)
+    ).fetchone()
+    if not vrstica:
+        conn.close()
+        return None
+    uporabnik_id, poteklo = vrstica[0], vrstica[1]
+    # Žeton vedno odstrani (enkratna uporaba)
+    conn.execute("DELETE FROM prijavni_zetoni WHERE token = ?", (token,))
+    conn.commit()
+    conn.close()
+    if poteklo < datetime.now().isoformat():
+        logger.info("Prijavni žeton je potekel.")
+        return None
+    return uporabnik_id
+
+
+# ---------------------------------------------------------------------------
+# Profili — pregled in upravljanje (nadzorna plošča)
+# ---------------------------------------------------------------------------
+
+def poberi_profile_uporabnika(uporabnik_id: int) -> list:
+    """Vrne aktivne profile uporabnika (izbrani deserializiran)."""
+    conn = _poveži()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT * FROM profili WHERE uporabnik_id = ? AND aktiven = 1 ORDER BY id",
+        (uporabnik_id,),
+    )
+    vrstice = [dict(row) for row in cur.fetchall()]
+    conn.close()
+    for p in vrstice:
+        try:
+            p["izbrani"] = json.loads(p.get("izbrani") or "[]")
+        except json.JSONDecodeError:
+            p["izbrani"] = []
+    return vrstice
+
+
+def aktivnih_profilov(uporabnik_id: int) -> int:
+    """Število aktivnih profilov uporabnika (za mejo paketa)."""
+    conn = _poveži()
+    n = conn.execute(
+        "SELECT COUNT(*) FROM profili WHERE uporabnik_id = ? AND aktiven = 1",
+        (uporabnik_id,),
+    ).fetchone()[0]
+    conn.close()
+    return n
+
+
+def izbrisi_profil(profil_id: int, uporabnik_id: int) -> bool:
+    """
+    Soft-izbris profila (aktiven = 0) — samo če pripada uporabniku.
+    Podatkov in matching zgodovine trdo ne brišemo.
+    """
+    conn = _poveži()
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE profili SET aktiven = 0 WHERE id = ? AND uporabnik_id = ?",
+        (profil_id, uporabnik_id),
+    )
+    conn.commit()
+    spremenjeno = cur.rowcount
+    conn.close()
+    return spremenjeno > 0
 
 
 # ---------------------------------------------------------------------------

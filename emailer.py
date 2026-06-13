@@ -267,6 +267,27 @@ def pošlji_potrditev(email: str, potrditveni_url: str) -> bool:
     return _poslji_html(email, "Potrdite prijavo na javna-narocila.si", html)
 
 
+def pošlji_prijavni_link(email: str, url: str) -> bool:
+    """Pošlje povezavo za prijavo brez gesla (magic link)."""
+    html = (
+        "<html><body style='font-family: Arial, sans-serif; max-width: 640px; "
+        "margin: 0 auto; padding: 20px; color: #333;'>"
+        "<h2 style='color: #1a1a2e;'>Prijava v vaš račun</h2>"
+        "<p>Za prijavo na javna-narocila.si kliknite spodnji gumb. Povezava velja "
+        "omejen čas in jo je mogoče uporabiti enkrat.</p>"
+        f"<p style='margin: 28px 0;'><a href='{url}' "
+        "style='background: #2563eb; color: #fff; padding: 12px 24px; "
+        "border-radius: 6px; text-decoration: none; font-weight: bold;'>"
+        "Prijava</a></p>"
+        "<p style='font-size: 13px; color: #666;'>Če gumb ne deluje, kopirajte to povezavo v brskalnik:<br>"
+        f"<span style='color: #2563eb;'>{url}</span></p>"
+        "<hr style='margin-top: 32px; border: none; border-top: 1px solid #ddd;'>"
+        "<p style='font-size: 12px; color: #999;'>Če prijave niste zahtevali vi, ta email prezrite.</p>"
+        "</body></html>"
+    )
+    return _poslji_html(email, "Prijava na javna-narocila.si", html)
+
+
 def _vrstica_ai(n: dict) -> str:
     """Ena vrstica naročila v AI emailu — z razlogom in poudarjenim rokom."""
     naziv = (n.get("naziv") or "Brez naziva")[:140]
