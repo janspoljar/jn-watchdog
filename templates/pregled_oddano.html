@@ -2,22 +2,29 @@
 {% block naslov %}Pregled poslan — Lovec{% endblock %}
 
 {% block vsebina %}
-<div class="kartica sredina" style="max-width:640px; margin:0 auto;">
-    <h1 style="margin-top:0;">Pregled je na poti ✓</h1>
-    {% if stevilo %}
-    <p class="vodilo" style="margin:0 auto 8px;">
-        Našli smo <strong>{{ stevilo }}</strong> javnih naročil zadnjih 30 dni za vašo dejavnost.
-        Poslali smo jih na <strong>{{ email }}</strong>.
-    </p>
-    {% else %}
-    <p class="vodilo" style="margin:0 auto 8px;">
-        Poslali smo pregled na <strong>{{ email }}</strong>. Tokrat se v zadnjih
-        30 dneh ni našlo ujemajočih naročil — z naročnino vas obvestimo takoj, ko izide kaj za vas.
-    </p>
-    {% endif %}
-    <p class="drobno">Preverite tudi mapo z neželeno pošto, če emaila ne vidite v nekaj minutah.</p>
-    <p style="margin-top:24px;">
-        <a href="/registracija" class="gumb">Želim prejemati alerte redno</a>
-    </p>
+<section>
+<div class="ovoj">
+    <div class="kartica sredina ozko" style="margin:0 auto;">
+        <div class="ikona" style="margin:0 auto 16px; background:#f0fdf4; color:var(--ok);">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        </div>
+        <h1 style="font-size:30px;">Pregled je na poti</h1>
+        {% if stevilo %}
+        <p class="vodilo" style="margin:0 auto 8px;">
+            Našli smo <strong>{{ stevilo }}</strong> javnih naročil zadnjih 30 dni za vašo dejavnost.
+            Poslali smo jih na <strong>{{ email }}</strong>.
+        </p>
+        {% else %}
+        <p class="vodilo" style="margin:0 auto 8px;">
+            Poslali smo pregled na <strong>{{ email }}</strong>. Tokrat se v zadnjih
+            30 dneh ni našlo ujemajočih naročil — z naročnino vas obvestimo takoj, ko izide kaj za vas.
+        </p>
+        {% endif %}
+        <p class="drobno">Preverite tudi mapo z neželeno pošto, če emaila ne vidite v nekaj minutah.</p>
+        <p style="margin-top:24px;">
+            <a href="/registracija" class="gumb">Želim prejemati alerte redno</a>
+        </p>
+    </div>
 </div>
+</section>
 {% endblock %}

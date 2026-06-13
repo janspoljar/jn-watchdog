@@ -1,75 +1,250 @@
 {% extends "base.html" %}
 
 {% block vsebina %}
-<section>
-    <h1>Nikoli več zamujenega razpisa.</h1>
-    <p class="vodilo">
-        Lovec vsak dan spremlja javna naročila na portalu ejn.gov.si in vam
-        pošlje le tista, ki ustrezajo vaši dejavnosti. Brez ročnega iskanja,
-        brez zamujenih rokov.
-    </p>
-    <p style="margin-top:28px;">
-        <a href="/pregled" class="gumb">Brezplačni pregled zadnjih 30 dni</a>
-        <a href="/registracija" class="gumb gumb-obroba" style="margin-left:8px;">Začni z beto</a>
-    </p>
-    <p class="drobno" style="margin-top:12px;">Brezplačno · brez kartice · v 2 minutah</p>
-</section>
 
-<section>
-    <h2>Kako deluje</h2>
-    <div class="koraki">
-        <div class="korak">
-            <div class="num">1</div>
-            <h3>Opišete dejavnost</h3>
-            <p>Izberete svojo panogo in odkljukate vse, kar počnete — od novogradenj
-            do notranjih del. Bolj natančno kot opišete, manj boste zamudili.</p>
-        </div>
-        <div class="korak">
-            <div class="num">2</div>
-            <h3>Lovec išče namesto vas</h3>
-            <p>Vsak dan pregledamo nova javna naročila in jih primerjamo z vašim
-            profilom. Relevantna zberemo, ostala odvržemo.</p>
-        </div>
-        <div class="korak">
-            <div class="num">3</div>
-            <h3>Dobite obvestilo</h3>
-            <p>Na email prejmete le naročila, ki so za vas — z jasno označenim
-            rokom oddaje. Pravočasno, da se lahko prijavite.</p>
+<!-- HERO -->
+<section class="hero">
+    <div class="ovoj">
+        <div class="hero-grid">
+            <div>
+                <span class="znacka">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                    Javna naročila, brez ročnega iskanja
+                </span>
+                <h1>Nikoli več zamujenega razpisa.</h1>
+                <p class="vodilo">
+                    Lovec vsak dan spremlja javna naročila na portalu ejn.gov.si in vam
+                    pošlje le tista, ki ustrezajo vaši dejavnosti. Brez prebiranja
+                    portalov, brez zamujenih rokov.
+                </p>
+                <div class="cta-vrsta">
+                    <a href="/pregled" class="gumb">Brezplačni pregled</a>
+                    <a href="/registracija" class="gumb obroba">Začni z beto</a>
+                </div>
+                <div class="mikro pike">
+                    <span>✓ Brezplačno</span>
+                    <span>✓ Brez kartice</span>
+                    <span>✓ V 2 minutah</span>
+                </div>
+            </div>
+            <div class="okno" aria-hidden="true">
+                <div class="okno-vrh">
+                    <i></i><i></i><i></i>
+                    <span class="naslov">Nova javna naročila</span>
+                </div>
+                <div class="mail-glava">
+                    <div class="mail-zadeva">📋 4 nova javna naročila — 13. 06. 2026</div>
+                    <div class="mail-od">Lovec · narocila@javna-narocila.si</div>
+                </div>
+                <div class="mail-vrstica">
+                    <div class="n">Sanacija fasade na osnovni šoli</div>
+                    <div class="o">OŠ Koper</div>
+                    <div class="r">Rok oddaje: <b>15. 07. 2026</b></div>
+                </div>
+                <div class="mail-vrstica">
+                    <div class="n">Rekonstrukcija ceste</div>
+                    <div class="o">Občina Maribor</div>
+                    <div class="r">Rok oddaje: <b>20. 07. 2026</b></div>
+                </div>
+                <div class="mail-vrstica drobno" style="color:var(--muted);">…in še 2 naročili za vašo dejavnost</div>
+            </div>
         </div>
     </div>
 </section>
 
-<section>
-    <h2>Paketi</h2>
-    <p class="vodilo">Izberite frekvenco, ki ustreza vašemu poslu. Med beta fazo je vse brezplačno.</p>
-    <div class="paketi">
-        {% for p in paketi %}
-        <div class="paket {% if p.izpostavljen %}izpostavljen{% endif %}">
-            {% if p.izpostavljen %}<span class="znacka">Najbolj priljubljen</span>{% endif %}
-            <h3>{{ p.ime }}</h3>
-            <div class="cena">{{ p.cena }}<small>{{ p.obdobje }}</small></div>
-            <p class="drobno">{{ p.frekvenca }} · {{ p.profili }}</p>
-            <ul>
-                {% for z in p.znacilnosti %}<li>{{ z }}</li>{% endfor %}
-            </ul>
-            <a href="/registracija?paket={{ p.key }}" class="gumb {% if not p.izpostavljen %}gumb-obroba{% endif %}">
-                Začni brezplačno beta
-            </a>
+<!-- KAKO DELUJE -->
+<section id="kako" class="soft-bg">
+    <div class="ovoj">
+        <div class="sekcija-glava">
+            <h2>Kako deluje</h2>
+            <p class="vodilo">Trije koraki do tega, da vam pravi razpisi pridejo sami.</p>
         </div>
-        {% endfor %}
+        <div class="mreza-3">
+            <div class="karta korak">
+                <span class="korak-num">1</span>
+                <div class="ikona">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                </div>
+                <h3>Opišete dejavnost</h3>
+                <p class="drobno" style="font-size:15px;">Izberete panogo in odkljukate vse, kar počnete — od novogradenj do notranjih del. Bolj natančno, manj zamudite.</p>
+            </div>
+            <div class="karta korak">
+                <span class="korak-num">2</span>
+                <div class="ikona">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+                </div>
+                <h3>Lovec išče namesto vas</h3>
+                <p class="drobno" style="font-size:15px;">Vsak dan pregledamo nova javna naročila in jih primerjamo z vašim profilom. Relevantna zberemo, ostala odvržemo.</p>
+            </div>
+            <div class="karta korak">
+                <span class="korak-num">3</span>
+                <div class="ikona">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="m4 6 8 6 8-6"/></svg>
+                </div>
+                <h3>Dobite obvestilo</h3>
+                <p class="drobno" style="font-size:15px;">Na email prejmete le naročila, ki so za vas — z jasno označenim rokom oddaje. Pravočasno, da se prijavite.</p>
+            </div>
+        </div>
     </div>
-    <p class="drobno" style="margin-top:16px;">
-        Cene veljajo po beta fazi. Beta uporabniki bodo o prehodu na plačljivo
-        naročnino pravočasno obveščeni in nezavezujoče.
-    </p>
 </section>
 
-<section class="kartica sredina" style="margin-top:48px;">
-    <h2 style="margin-top:0;">Preverite, kaj ste zamudili zadnji mesec</h2>
-    <p class="vodilo" style="margin:0 auto 20px;">
-        Vpišite svojo dejavnost in v nekaj sekundah na email prejmete pregled
-        javnih naročil zadnjih 30 dni, ki bi bila za vas.
-    </p>
-    <a href="/pregled" class="gumb">Naredi brezplačni pregled</a>
+<!-- PREDOGLED EMAILA -->
+<section>
+    <div class="ovoj">
+        <div class="sekcija-glava sredina">
+            <h2>To prejmete v nabiralnik</h2>
+            <p class="vodilo">Pregleden email z naročili, ki ustrezajo vaši dejavnosti — vsako z naročnikom in rokom oddaje.</p>
+        </div>
+        <div class="okno" style="max-width:620px; margin:0 auto;">
+            <div class="okno-vrh">
+                <i></i><i></i><i></i>
+                <span class="naslov">Vaša nova javna naročila</span>
+            </div>
+            <div class="mail-glava">
+                <div class="mail-zadeva">📋 4 nova javna naročila — 13. 06. 2026</div>
+                <div class="mail-od">Lovec · narocila@javna-narocila.si</div>
+            </div>
+            <div class="mail-vrstica">
+                <div class="n">Sanacija fasade na osnovni šoli</div>
+                <div class="o">OŠ Koper</div>
+                <div class="r">Rok oddaje: <b>15. 07. 2026</b></div>
+            </div>
+            <div class="mail-vrstica">
+                <div class="n">Rekonstrukcija ceste</div>
+                <div class="o">Občina Maribor</div>
+                <div class="r">Rok oddaje: <b>20. 07. 2026</b></div>
+            </div>
+            <div class="mail-vrstica">
+                <div class="n">Izgradnja vrtca</div>
+                <div class="o">Mestna občina Novo mesto</div>
+                <div class="r">Rok oddaje: <b>28. 07. 2026</b></div>
+            </div>
+            <div class="mail-vrstica drobno">
+                Prejemate, ker ste naročeni na Lovec — alerti o javnih naročilih · Odjava
+            </div>
+        </div>
+    </div>
 </section>
+
+<!-- PRIMER UJEMANJA -->
+<section class="soft-bg">
+    <div class="ovoj">
+        <div class="sekcija-glava">
+            <h2>Primer ujemanja</h2>
+            <p class="vodilo">Bolj natančno kot opišete dejavnost, manj boste zamudili.</p>
+        </div>
+        <div class="primer">
+            <div class="karta">
+                <h3>Vnos stranke</h3>
+                <p class="drobno" style="margin:4px 0 0;">Panoga: <b style="color:var(--ink);">Gradbeništvo</b></p>
+                <div class="znak-vrsta">
+                    <span class="znak">Novogradnje</span>
+                    <span class="znak">Fasade</span>
+                    <span class="znak">Notranja dela</span>
+                </div>
+                <p class="drobno" style="margin-top:12px;">+ »delamo tudi adaptacije javnih objektov«</p>
+            </div>
+            <div class="pusica">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </div>
+            <div class="karta">
+                <h3>Kar prejme</h3>
+                <ul class="seznam-razpisov">
+                    <li>Sanacija fasade na osnovni šoli</li>
+                    <li>Adaptacija javne stavbe</li>
+                    <li>Novogradnja vrtca</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- CENIK -->
+<section id="cenik">
+    <div class="ovoj">
+        <div class="sekcija-glava sredina">
+            <h2>Paketi</h2>
+            <p class="vodilo">Izberite frekvenco, ki ustreza vašemu poslu. Med beta fazo je vse brezplačno.</p>
+        </div>
+        <div class="paketi">
+            {% for p in paketi %}
+            <div class="paket {% if p.izpostavljen %}izpostavljen{% endif %}">
+                {% if p.izpostavljen %}<span class="top-znacka">Najbolj priljubljen</span>{% endif %}
+                <h3>{{ p.ime }}</h3>
+                <div class="cena">{{ p.cena }}<small>{{ p.obdobje }}</small></div>
+                <p class="frek">{{ p.frekvenca }} · {{ p.profili }}</p>
+                <ul>
+                    {% for z in p.znacilnosti %}<li>{{ z }}</li>{% endfor %}
+                </ul>
+                <a href="/registracija?paket={{ p.key }}" class="gumb poln {% if not p.izpostavljen %}obroba{% endif %}">Začni brezplačno beta</a>
+            </div>
+            {% endfor %}
+        </div>
+        <p class="drobno sredina" style="margin-top:18px;">
+            Cene veljajo po beta fazi. Beta uporabniki bodo o prehodu na plačljivo naročnino pravočasno in nezavezujoče obveščeni.
+        </p>
+    </div>
+</section>
+
+<!-- FAQ -->
+<section class="soft-bg">
+    <div class="ovoj">
+        <div class="sekcija-glava">
+            <h2>Pogosta vprašanja</h2>
+        </div>
+        <div class="faq">
+            <details class="qa">
+                <summary>Od kod prihajajo podatki?</summary>
+                <div class="odg">Z uradnega portala ejn.gov.si, ki ga spremljamo vsak dan.</div>
+            </details>
+            <details class="qa">
+                <summary>Kako so izbrana naročila zame?</summary>
+                <div class="odg">Po profilu vaše dejavnosti (panoga, podpodročja, opis). V beta fazi po ključnih besedah; kmalu z naprednim AI ujemanjem.</div>
+            </details>
+            <details class="qa">
+                <summary>Kako pogosto prejemam obvestila?</summary>
+                <div class="odg">Po paketu: Osnovni tedensko, Pro dnevno, Business sproti (v realnem času).</div>
+            </details>
+            <details class="qa">
+                <summary>Ali lahko odpovem?</summary>
+                <div class="odg">Da, kadarkoli prek povezave v vsakem emailu. Brez vezave.</div>
+            </details>
+            <details class="qa">
+                <summary>Kaj me stane med beto?</summary>
+                <div class="odg">Nič. Beta je brezplačna; o prehodu na plačljivo boste pravočasno in nezavezujoče obveščeni.</div>
+            </details>
+            <details class="qa">
+                <summary>Je to uradni državni portal?</summary>
+                <div class="odg">Ne. Lovec je neodvisna storitev, ki podatke zajema z javnega portala ejn.gov.si.</div>
+            </details>
+        </div>
+    </div>
+</section>
+
+<!-- ZAUPANJE -->
+<section class="pas-zaupanja">
+    <div class="ovoj">
+        <div class="sekcija-glava sredina">
+            <h2>Zanesljiv vir, brez šuma</h2>
+            <p class="vodilo">Podatki prihajajo z uradnega portala <strong>ejn.gov.si</strong>. Vi dobite le tisto, kar je za vas.</p>
+        </div>
+        <div class="izjave">
+            <div class="izjava">„Prostor za vašo izkušnjo — med beto zbiramo prve odzive strank.“</div>
+            <div class="izjava">„Prostor za vašo izkušnjo — med beto zbiramo prve odzive strank.“</div>
+            <div class="izjava">„Prostor za vašo izkušnjo — med beto zbiramo prve odzive strank.“</div>
+        </div>
+    </div>
+</section>
+
+<!-- ZAKLJUČNI CTA -->
+<section>
+    <div class="ovoj">
+        <div class="cta-pas">
+            <h2>Preverite, kaj ste zamudili zadnji mesec</h2>
+            <p class="vodilo">Vpišite svojo dejavnost in v nekaj sekundah na email prejmete pregled javnih naročil zadnjih 30 dni, ki bi bila za vas.</p>
+            <a href="/pregled" class="gumb">Naredi brezplačni pregled</a>
+        </div>
+    </div>
+</section>
+
 {% endblock %}

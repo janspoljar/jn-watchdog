@@ -2,14 +2,19 @@
 {% block naslov %}Potrdite email — Lovec{% endblock %}
 
 {% block vsebina %}
-<div class="kartica sredina" style="max-width:640px; margin:0 auto;">
-    <h1 style="margin-top:0;">Še en korak ✉️</h1>
-    <p class="vodilo" style="margin:0 auto 8px;">
-        Na <strong>{{ email }}</strong> smo poslali email za potrditev prijave.
-        Kliknite gumb v emailu in alerti začnejo prihajati.
-    </p>
-    <p class="drobno">
-        Emaila ne vidite? Preverite mapo z neželeno pošto ali počakajte nekaj minut.
-    </p>
+<section>
+<div class="ovoj">
+    <div class="kartica sredina ozko" style="margin:0 auto;">
+        <div class="ikona" style="margin:0 auto 16px;">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="m4 6 8 6 8-6"/></svg>
+        </div>
+        <h1 style="font-size:30px;">Še en korak</h1>
+        <p class="vodilo" style="margin:0 auto 8px;">
+            Na <strong>{{ email }}</strong> smo poslali email za potrditev prijave.
+            Kliknite gumb v emailu in alerti začnejo prihajati.
+        </p>
+        <p class="drobno">Emaila ne vidite? Preverite mapo z neželeno pošto ali počakajte nekaj minut.</p>
+    </div>
 </div>
+</section>
 {% endblock %}

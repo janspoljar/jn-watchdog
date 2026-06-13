@@ -2,21 +2,30 @@
 {% block naslov %}Potrditev — Lovec{% endblock %}
 
 {% block vsebina %}
-<div class="kartica sredina" style="max-width:640px; margin:0 auto;">
-    {% if uspeh %}
-    <h1 style="margin-top:0;">Prijava potrjena ✓</h1>
-    <p class="vodilo" style="margin:0 auto 8px;">
-        Vaš email je potrjen in profil je aktiven. Od zdaj naprej vas Lovec
-        obvešča o javnih naročilih, ki ustrezajo vaši dejavnosti.
-    </p>
-    <p style="margin-top:24px;"><a href="/" class="gumb">Nazaj na domačo stran</a></p>
-    {% else %}
-    <h1 style="margin-top:0;">Povezava ni veljavna</h1>
-    <p class="vodilo" style="margin:0 auto 8px;">
-        Ta potrditvena povezava je neveljavna ali že uporabljena. Poskusite se
-        znova prijaviti.
-    </p>
-    <p style="margin-top:24px;"><a href="/registracija" class="gumb">Ponovna registracija</a></p>
-    {% endif %}
+<section>
+<div class="ovoj">
+    <div class="kartica sredina ozko" style="margin:0 auto;">
+        {% if uspeh %}
+        <div class="ikona" style="margin:0 auto 16px; background:#f0fdf4; color:var(--ok);">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        </div>
+        <h1 style="font-size:30px;">Prijava potrjena</h1>
+        <p class="vodilo" style="margin:0 auto 8px;">
+            Vaš email je potrjen in profil je aktiven. Od zdaj naprej vas Lovec
+            obvešča o javnih naročilih, ki ustrezajo vaši dejavnosti.
+        </p>
+        <p style="margin-top:24px;"><a href="/" class="gumb">Nazaj na domačo stran</a></p>
+        {% else %}
+        <div class="ikona" style="margin:0 auto 16px; background:#fef2f2; color:var(--rok);">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </div>
+        <h1 style="font-size:30px;">Povezava ni veljavna</h1>
+        <p class="vodilo" style="margin:0 auto 8px;">
+            Ta potrditvena povezava je neveljavna ali že uporabljena. Poskusite se znova prijaviti.
+        </p>
+        <p style="margin-top:24px;"><a href="/registracija" class="gumb">Ponovna registracija</a></p>
+        {% endif %}
+    </div>
 </div>
+</section>
 {% endblock %}
