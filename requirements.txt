@@ -9,3 +9,4 @@ python-dotenv
 schedule
 gunicorn
 boto3
+anthropic

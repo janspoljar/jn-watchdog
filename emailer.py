@@ -267,6 +267,115 @@ def pošlji_potrditev(email: str, potrditveni_url: str) -> bool:
     return _poslji_html(email, "Potrdite prijavo na javna-narocila.si", html)
 
 
+def _vrstica_ai(n: dict) -> str:
+    """Ena vrstica naročila v AI emailu — z razlogom in poudarjenim rokom."""
+    naziv = (n.get("naziv") or "Brez naziva")[:140]
+    narocnik = n.get("narocnik") or "Neznan naročnik"
+    rok = n.get("rok_oddaje") or "ni podan"
+    reason = (n.get("reason") or "").strip()
+    razlog_html = (
+        f"<div style='margin-top:6px; font-size:13px; color:#1a73e8;'>"
+        f"Zakaj je to za vas: {reason}</div>" if reason else ""
+    )
+    return f"""
+    <tr>
+        <td style="padding: 14px 16px; border-bottom: 1px solid #eee;">
+            <div style="font-weight: bold; color: #1a1a2e;">{naziv}</div>
+            <div style="font-size: 13px; color: #666;">{narocnik}</div>
+            <div style="font-size: 13px;">Rok oddaje: <span style="color: #d93025; font-weight: bold;">{rok}</span></div>
+            {razlog_html}
+        </td>
+    </tr>
+    """
+
+
+def _sestavi_ai_html(uporabnik_email: str, narocila: list) -> str:
+    """
+    Sestavi HTML AI emaila: naročila sortirana po confidence, razdeljena na
+    glavno sekcijo (>= prag glavni) in "Morda zanimivo" (>= prag morda).
+    """
+    danes = datetime.now().strftime("%d. %m. %Y")
+    glavni = [n for n in narocila if n.get("confidence", 0) >= config.MATCH_PRAG_GLAVNI]
+    morda = [
+        n for n in narocila
+        if config.MATCH_PRAG_MORDA <= n.get("confidence", 0) < config.MATCH_PRAG_GLAVNI
+    ]
+
+    html = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; color: #333;">
+        <h2 style="color: #1a1a2e; border-bottom: 2px solid #1a73e8; padding-bottom: 8px;">
+            Nova javna naročila za vas — {danes}
+        </h2>
+    """
+
+    if glavni:
+        html += '<h3 style="margin-top:24px;">Ustrezna naročila</h3>'
+        html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">'
+        html += "".join(_vrstica_ai(n) for n in glavni)
+        html += "</table>"
+
+    if morda:
+        html += '<h3 style="margin-top:28px; color:#666;">Morda zanimivo</h3>'
+        html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">'
+        html += "".join(_vrstica_ai(n) for n in morda)
+        html += "</table>"
+
+    html += f"""
+        <hr style="margin-top: 32px; border: none; border-top: 1px solid #ddd;">
+        <p style="font-size: 12px; color: #999;">
+            Prejemate ta email, ker ste naročeni na javna-narocila.si — alerte o javnih naročilih.<br>
+            <a href="{config.BASE_URL}/odjava?email={uporabnik_email}" style="color: #999;">Odjava od obvestil</a>
+        </p>
+    </body>
+    </html>
+    """
+    return html
+
+
+def pošlji_ai_email(uporabnik_email: str, narocila: list) -> bool:
+    """
+    Pošlje personaliziran AI email z ujemajočimi naročili (s confidence in reason).
+
+    Args:
+        uporabnik_email: prejemnik.
+        narocila:        seznam dict s ključi naziv, narocnik, rok_oddaje,
+                         confidence, reason (sortiran po confidence padajoče).
+    Returns:
+        True ob uspehu (ali dry-run), False sicer.
+    """
+    if not narocila:
+        return False
+    danes = datetime.now().strftime("%d. %m. %Y")
+    html = _sestavi_ai_html(uporabnik_email, narocila)
+    return _poslji_html(uporabnik_email, f"{len(narocila)} novih javnih naročil za vas — {danes}", html)
+
+
+def pošlji_admin_heartbeat(stat: dict, poslanih_danes: int, napake: list | None = None) -> bool:
+    """Dnevni povzetek stanja sistema adminu (Faza 2/3)."""
+    danes = datetime.now().strftime("%d. %m. %Y")
+    napake = napake or []
+    napake_html = (
+        "<ul>" + "".join(f"<li>{n}</li>" for n in napake) + "</ul>"
+        if napake else "<p>Brez napak.</p>"
+    )
+    html = (
+        "<html><body style='font-family: Arial; color: #333;'>"
+        f"<h2>javna-narocila.si — dnevni povzetek {danes}</h2>"
+        "<table cellpadding='6' style='border-collapse: collapse;'>"
+        f"<tr><td>Naročil v bazi:</td><td><strong>{stat.get('narocila', 0)}</strong></td></tr>"
+        f"<tr><td>Aktivnih uporabnikov:</td><td><strong>{stat.get('aktivni_uporabniki', 0)}</strong></td></tr>"
+        f"<tr><td>Aktivnih profilov:</td><td><strong>{stat.get('aktivni_profili', 0)}</strong></td></tr>"
+        f"<tr><td>Matching ocen skupaj:</td><td><strong>{stat.get('ocen_skupaj', 0)}</strong></td></tr>"
+        f"<tr><td>Leadov:</td><td><strong>{stat.get('leadi', 0)}</strong></td></tr>"
+        f"<tr><td>Emailov poslanih danes (Pro):</td><td><strong>{poslanih_danes}</strong></td></tr>"
+        "</table>"
+        f"<h3>Napake</h3>{napake_html}"
+        "</body></html>"
+    )
+    return _pošlji_admin(f"javna-narocila.si povzetek {danes}", html)
+
+
 def pošlji_test_email(email: str) -> bool:
     """
     Pošlje testni email s 3 dummy naročili — za preverbo Resend integracije.

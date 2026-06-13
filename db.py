@@ -99,14 +99,83 @@ def init_db():
         )
     """)
 
+    # --- Faza 3: AI matching ---
+
+    # Profili stranke — Pro do 3, Business neomejeno (en uporabnik = več profilov).
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS profili (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            uporabnik_id  INTEGER NOT NULL,
+            naziv         TEXT,
+            panoga        TEXT,
+            opis          TEXT,
+            izbrani       TEXT,
+            regije        TEXT,
+            vrednost_min  INTEGER,
+            vrednost_max  INTEGER,
+            aktiven       INTEGER NOT NULL DEFAULT 1,
+            datum         TEXT,
+            FOREIGN KEY (uporabnik_id) REFERENCES uporabniki(id)
+        )
+    """)
+
+    # Odločitve AI matchinga — ena vrstica na (naročilo × profil).
+    # UNIQUE(pjn, profil_id) zagotavlja idempotentnost in deluje kot cache:
+    # istega naročila proti istemu profilu nikoli ne ocenimo (in plačamo) dvakrat.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS matching (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            pjn         TEXT    NOT NULL,
+            profil_id   INTEGER NOT NULL,
+            relevant    INTEGER,
+            confidence  REAL,
+            reason      TEXT,
+            datum       TEXT,
+            UNIQUE (pjn, profil_id),
+            FOREIGN KEY (profil_id) REFERENCES profili(id)
+        )
+    """)
+
+    # Beleženje, katero naročilo je bilo kateremu uporabniku že poslano
+    # (per-user idempotentnost — nadomesti globalni narocila.poslano za Fazo 3).
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS poslano_userju (
+            uporabnik_id  INTEGER NOT NULL,
+            pjn           TEXT    NOT NULL,
+            datum         TEXT,
+            PRIMARY KEY (uporabnik_id, pjn)
+        )
+    """)
+
     conn.commit()
 
     # Migracije obstoječih tabel (idempotentno) — dodaj manjkajoče stolpce.
     _migriraj_uporabnike(conn)
+    # Obstoječim uporabnikom z že vpisano panogo ustvari prvi profil.
+    _migriraj_profile(conn)
 
     conn.commit()
     conn.close()
     logger.info("Baza inicializirana.")
+
+
+def _migriraj_profile(conn):
+    """
+    Za vsakega uporabnika, ki ima vpisano panogo a še nima nobenega profila,
+    ustvari prvi profil iz podatkov registracije (panoga, opis). Idempotentno.
+    """
+    vrstice = conn.execute("""
+        SELECT u.id, u.panoga, u.opis
+        FROM uporabniki u
+        WHERE u.panoga IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM profili p WHERE p.uporabnik_id = u.id)
+    """).fetchall()
+    for u in vrstice:
+        conn.execute("""
+            INSERT INTO profili (uporabnik_id, panoga, opis, izbrani, aktiven, datum)
+            VALUES (?, ?, ?, ?, 1, ?)
+        """, (u[0], u[1], u[2], "[]", datetime.now().isoformat()))
+        logger.info(f"Migracija: ustvarjen profil za uporabnik_id={u[0]}.")
 
 
 def _migriraj_uporabnike(conn):
@@ -444,9 +513,17 @@ def shrani_lead(email: str, panoga: str, opis: str, izbrani: list, vir: str = "p
 # Registracija z double opt-in (Faza 4)
 # ---------------------------------------------------------------------------
 
+def _id_uporabnika(email: str) -> int | None:
+    """Vrne ID uporabnika po emailu, ali None."""
+    conn = _poveži()
+    vrstica = conn.execute("SELECT id FROM uporabniki WHERE email = ?", (email,)).fetchone()
+    conn.close()
+    return vrstica[0] if vrstica else None
+
+
 def registriraj_uporabnika(
     email: str, panoga: str, opis: str, paket: str,
-    kategorije: list, token: str,
+    kategorije: list, token: str, izbrani: list | None = None,
 ) -> bool:
     """
     Vstavi/posodobi uporabnika za beta registracijo z double opt-in.
@@ -487,6 +564,10 @@ def registriraj_uporabnika(
         conn.close()
     if uspelo:
         logger.info(f"Registracija (čaka potrditev): {email}")
+        # Ustvari prvi profil iz podatkov registracije, če ga uporabnik še nima.
+        uid = _id_uporabnika(email)
+        if uid and stevilo_profilov(uid) == 0:
+            dodaj_profil(uid, panoga, opis, izbrani or [])
     return uspelo
 
 
@@ -518,6 +599,177 @@ def potrdi_uporabnika(token: str) -> str | None:
     conn.close()
     logger.info(f"Email potrjen, uporabnik aktiviran (beta): {email}")
     return email
+
+
+# ---------------------------------------------------------------------------
+# Profili in AI matching (Faza 3)
+# ---------------------------------------------------------------------------
+
+def dodaj_profil(uporabnik_id: int, panoga: str, opis: str, izbrani: list,
+                 regije: list | None = None, vrednost_min: int | None = None,
+                 vrednost_max: int | None = None, naziv: str | None = None) -> int:
+    """Vstavi nov profil za uporabnika. Vrne ID profila."""
+    conn = _poveži()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO profili
+            (uporabnik_id, naziv, panoga, opis, izbrani, regije,
+             vrednost_min, vrednost_max, aktiven, datum)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+    """, (
+        uporabnik_id, naziv, panoga, opis,
+        json.dumps(izbrani or [], ensure_ascii=False),
+        json.dumps(regije or [], ensure_ascii=False),
+        vrednost_min, vrednost_max, datetime.now().isoformat(),
+    ))
+    conn.commit()
+    profil_id = cur.lastrowid
+    conn.close()
+    logger.info(f"Dodan profil id={profil_id} za uporabnik_id={uporabnik_id}.")
+    return profil_id
+
+
+def stevilo_profilov(uporabnik_id: int) -> int:
+    """Vrne število profilov uporabnika (za omejitev Pro=3)."""
+    conn = _poveži()
+    n = conn.execute(
+        "SELECT COUNT(*) FROM profili WHERE uporabnik_id = ?", (uporabnik_id,)
+    ).fetchone()[0]
+    conn.close()
+    return n
+
+
+def poberi_aktivne_profile() -> list:
+    """
+    Vrne vse aktivne profile aktivnih uporabnikov, z dodanimi polji
+    email, paket in uporabnik_id. 'izbrani' je deserializiran v list.
+    """
+    conn = _poveži()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT p.*, u.email AS email, u.paket AS paket
+        FROM profili p
+        JOIN uporabniki u ON u.id = p.uporabnik_id
+        WHERE u.aktiven = 1 AND p.aktiven = 1
+    """)
+    vrstice = [dict(row) for row in cur.fetchall()]
+    conn.close()
+    for p in vrstice:
+        try:
+            p["izbrani"] = json.loads(p.get("izbrani") or "[]")
+        except json.JSONDecodeError:
+            p["izbrani"] = []
+    return vrstice
+
+
+def ze_ocenjeni_pjn_za_profil(profil_id: int) -> set:
+    """Vrne množico PJN oznak, ki so za ta profil že ocenjene (cache)."""
+    conn = _poveži()
+    vrstice = conn.execute(
+        "SELECT pjn FROM matching WHERE profil_id = ?", (profil_id,)
+    ).fetchall()
+    conn.close()
+    return {v[0] for v in vrstice}
+
+
+def shrani_matching(pjn: str, profil_id: int, relevant: bool,
+                    confidence: float, reason: str):
+    """Shrani eno matching odločitev. Duplikate (pjn, profil) preskoči."""
+    conn = _poveži()
+    conn.execute("""
+        INSERT OR IGNORE INTO matching
+            (pjn, profil_id, relevant, confidence, reason, datum)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (
+        pjn, profil_id, 1 if relevant else 0,
+        float(confidence), reason, datetime.now().isoformat(),
+    ))
+    conn.commit()
+    conn.close()
+
+
+def poberi_uporabnike_po_paketu(paket: str) -> list:
+    """Vrne aktivne uporabnike izbranega paketa (id, email)."""
+    conn = _poveži()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, email FROM uporabniki WHERE aktiven = 1 AND paket = ?",
+        (paket,),
+    )
+    vrstice = [dict(row) for row in cur.fetchall()]
+    conn.close()
+    return vrstice
+
+
+def poberi_matche_za_uporabnika(uporabnik_id: int, prag_min: float) -> list:
+    """
+    Vrne relevantna naročila za uporabnika (čez vse njegove profile), katerih
+    confidence >= prag_min in ki uporabniku še niso bila poslana.
+    Deduplikira po PJN — obdrži najvišji confidence in pripadajoč reason.
+
+    Returns:
+        Seznam slovarjev: pjn, naziv, narocnik, rok_oddaje, datum_objave,
+        confidence, reason — sortirano po confidence padajoče.
+    """
+    conn = _poveži()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT n.pjn, n.naziv, n.narocnik, n.rok_oddaje, n.datum_objave,
+               m.confidence AS confidence, m.reason AS reason
+        FROM matching m
+        JOIN narocila n ON n.pjn = m.pjn
+        JOIN profili p ON p.id = m.profil_id
+        WHERE p.uporabnik_id = ?
+          AND m.relevant = 1
+          AND m.confidence >= ?
+          AND m.pjn NOT IN (
+              SELECT pjn FROM poslano_userju WHERE uporabnik_id = ?
+          )
+        ORDER BY m.confidence DESC
+    """, (uporabnik_id, prag_min, uporabnik_id))
+    vrstice = [dict(row) for row in cur.fetchall()]
+    conn.close()
+
+    # Dedup po pjn (prva pojavitev = najvišji confidence zaradi ORDER BY DESC)
+    videni = set()
+    rezultat = []
+    for v in vrstice:
+        if v["pjn"] in videni:
+            continue
+        videni.add(v["pjn"])
+        rezultat.append(v)
+    return rezultat
+
+
+def statistika() -> dict:
+    """Vrne osnovne števce za dnevni povzetek adminu."""
+    conn = _poveži()
+    def st(q):
+        return conn.execute(q).fetchone()[0]
+    podatki = {
+        "narocila": st("SELECT COUNT(*) FROM narocila"),
+        "aktivni_uporabniki": st("SELECT COUNT(*) FROM uporabniki WHERE aktiven = 1"),
+        "aktivni_profili": st("SELECT COUNT(*) FROM profili WHERE aktiven = 1"),
+        "ocen_skupaj": st("SELECT COUNT(*) FROM matching"),
+        "leadi": st("SELECT COUNT(*) FROM leads"),
+    }
+    conn.close()
+    return podatki
+
+
+def oznaci_poslano_userju(uporabnik_id: int, pjn_lista: list):
+    """Zabeleži, da so podana naročila uporabniku poslana (per-user dedup)."""
+    if not pjn_lista:
+        return
+    conn = _poveži()
+    danes = datetime.now().isoformat()
+    conn.executemany(
+        "INSERT OR IGNORE INTO poslano_userju (uporabnik_id, pjn, datum) VALUES (?, ?, ?)",
+        [(uporabnik_id, pjn, danes) for pjn in pjn_lista],
+    )
+    conn.commit()
+    conn.close()
+    logger.info(f"Označenih {len(pjn_lista)} naročil kot poslano uporabniku {uporabnik_id}.")
 
 
 # ---------------------------------------------------------------------------

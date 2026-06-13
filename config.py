@@ -32,3 +32,24 @@ S3_ACCESS_KEY_ID = os.getenv("S3_ACCESS_KEY_ID")
 S3_SECRET_ACCESS_KEY = os.getenv("S3_SECRET_ACCESS_KEY")
 S3_REGION = os.getenv("S3_REGION", "eu-central-1")
 BACKUP_RETENTION_DAYS = int(os.getenv("BACKUP_RETENTION_DAYS", 30))
+
+# --- AI matching (Faza 3) ---
+# Anthropic API ključ in model za ocenjevanje ustreznosti naročil.
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
+
+# Pragova zaupanja (confidence) za uvrstitev naročila v email:
+#   >= MATCH_PRAG_GLAVNI  -> glavna sekcija
+#   >= MATCH_PRAG_MORDA   -> sekcija "Morda zanimivo"
+#   pod tem              -> izpustimo
+MATCH_PRAG_GLAVNI = float(os.getenv("MATCH_PRAG_GLAVNI", "0.7"))
+MATCH_PRAG_MORDA = float(os.getenv("MATCH_PRAG_MORDA", "0.5"))
+
+# Največ naročil v enem batch klicu na model (velikost/strošek).
+MATCH_BATCH = int(os.getenv("MATCH_BATCH", "15"))
+
+# Varovalka stroškov: največ ocen (naročilo×profil) na en zagon matchinga.
+MATCH_MAX_NA_ZAGON = int(os.getenv("MATCH_MAX_NA_ZAGON", "2000"))
+
+# Časovna cona za urnik pošiljanja (Osnovni/Pro/Business).
+TIMEZONE = os.getenv("TZ", "Europe/Ljubljana")

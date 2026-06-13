@@ -6,7 +6,13 @@ FROM python:3.13-slim
 # Sistemske nastavitve: brez .pyc datotek, unbuffered izpis za loge
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    TZ=Europe/Ljubljana
+
+# tzdata — da urnik (07:00) teče po slovenskem času, ne UTC
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tzdata \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

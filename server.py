@@ -161,7 +161,7 @@ def registracija():
     kategorije = panoge.kategorije_za_panogo(panoga_key)
     token = secrets.token_urlsafe(32)
 
-    db.registriraj_uporabnika(email, panoga_key, opis, paket, kategorije, token)
+    db.registriraj_uporabnika(email, panoga_key, opis, paket, kategorije, token, izbrani=izbrani)
 
     potrditveni_url = f"{config.BASE_URL}/potrditev?token={token}"
     emailer.pošlji_potrditev(email, potrditveni_url)

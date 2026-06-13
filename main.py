@@ -1,12 +1,18 @@
 """
-main.py — Glavni orchestrator za jn-watchdog.
-Dnevni job: scraping -> filtriranje po uporabnikih -> pošiljanje emailov.
+main.py — Orchestrator za javna-narocila.si (Faza 3).
+
+Urnik (časovna cona iz config.TIMEZONE / TZ, privzeto Europe/Ljubljana):
+- vsako uro:      scrape novih naročil -> AI matching -> pošlji Business (real-time)
+- vsak dan 07:00: pošlji Pro + dnevni povzetek adminu
+- ponedeljek 07:00: pošlji Osnovni (tedensko)
 
 Zagon:
-    python main.py            # inicializira bazo + scheduler (vsak dan ob 06:00)
-    python main.py --test     # požene dnevni job takoj enkrat
-    python main.py --server   # zažene samo Flask API strežnik
-    python main.py --test --dry-run   # job brez pošiljanja: emaili v datoteko
+    python main.py                 # scheduler
+    python main.py --test          # enkrat: scrape + match + pošlji Business
+    python main.py --match         # enkrat: samo AI matching nad zadnjimi 30 dnevi
+    python main.py --send pro       # enkrat: pošlji izbranemu paketu (osnovni/pro/business)
+    python main.py --server         # samo Flask API
+    python main.py --dry-run ...    # emaili v datoteko namesto na Resend
 """
 
 import sys
@@ -15,130 +21,139 @@ import logging
 
 import schedule
 
+import config
 import db
 import emailer
 import sources
+import matching
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 
-def dnevni_job():
-    """
-    Dnevni job:
-    1. Inicializira bazo
-    2. Požene scraper in shrani nova naročila
-    3. Za vsakega aktivnega uporabnika pošlje email z relevantnimi naročili
-    4. Označi poslana naročila in shrani loge
-    5. Izpiše summary
-    """
-    logger.info("=== Začetek dnevnega joba ===")
+# ---------------------------------------------------------------------------
+# Gradniki
+# ---------------------------------------------------------------------------
 
-    napake = []
-    scraped = 0
-    novih = 0
-
-    # 1. Baza
+def scrape_nova() -> tuple:
+    """
+    Scrapa vse vire z retry logiko in shrani nova naročila.
+    Returns: (pobranih, novih, napake[list]).
+    """
     db.init_db()
-
-    # 2. Viri podatkov — vsak z retry logiko (30s, 2min, 10min);
-    #    ob popolnem failu vira alert adminu, job pa nadaljuje z že
-    #    shranjenimi (neposlanimi) naročili.
+    napake, pobranih, novih = [], 0, 0
     for source in sources.SOURCES:
         try:
-            narocila_vira = sources.fetch_z_retryjem(source)
-            scraped += len(narocila_vira)
-            novih += db.shrani_narocila(narocila_vira)
+            narocila = sources.fetch_z_retryjem(source)
+            pobranih += len(narocila)
+            novih += db.shrani_narocila(narocila)
         except sources.SourceError as e:
             logger.error(str(e))
             napake.append(str(e))
             emailer.pošlji_alert_adminu(f"Vir {source.name} ni dosegljiv", str(e))
+    logger.info(f"Scrape: pobranih {pobranih}, novih {novih}, napak {len(napake)}.")
+    return pobranih, novih, napake
 
-    logger.info(f"Viri končani: pobranih {scraped}, novih v bazi {novih}")
 
-    # 3. Aktivni uporabniki
-    uporabniki = db.poberi_aktivne_uporabnike()
-    logger.info(f"Aktivnih uporabnikov: {len(uporabniki)}")
+def pozeni_matching() -> dict:
+    """AI matching nad naročili zadnjih 30 dni (cache prepreči podvajanje)."""
+    narocila = db.poberi_narocila_zadnjih_dni(30)
+    return matching.pozeni_matching(narocila)
 
-    poslanih_emailov = 0
-    preskocenih = 0
-    poslanih_narocil = set()
 
-    # 4. Za vsakega uporabnika: relevantna neposlana naročila -> email -> log
-    for uporabnik in uporabniki:
-        # Idempotentnost: dvojni zagon joba ne sme poslati dvojnih emailov
-        if db.je_email_poslan_danes(uporabnik["id"]):
-            logger.info(f"Email za {uporabnik['email']} danes že poslan — preskočim.")
-            preskocenih += 1
+def poslji_paketu(paket: str) -> int:
+    """
+    Vsakemu aktivnemu uporabniku paketa pošlje ujemajoča naročila, ki mu še
+    niso bila poslana (confidence >= prag morda). Vrne število poslanih emailov.
+    """
+    poslanih = 0
+    for u in db.poberi_uporabnike_po_paketu(paket):
+        matchi = db.poberi_matche_za_uporabnika(u["id"], config.MATCH_PRAG_MORDA)
+        if not matchi:
             continue
-
-        narocila = db.poberi_nova_narocila(uporabnik["kategorije"])
-        if not narocila:
-            logger.info(f"Ni novih naročil za {uporabnik['email']}.")
-            continue
-
-        if emailer.pošlji_email(uporabnik["email"], narocila):
-            poslanih_emailov += 1
-            db.shrani_email_log(uporabnik["id"], len(narocila))
-            # Zberi PJN oznake za kasnejšo označitev
-            for n in narocila:
-                poslanih_narocil.add(n["pjn"])
+        if emailer.pošlji_ai_email(u["email"], matchi):
+            db.oznaci_poslano_userju(u["id"], [m["pjn"] for m in matchi])
+            db.shrani_email_log(u["id"], len(matchi))
+            poslanih += 1
         else:
-            logger.error(f"Email za {uporabnik['email']} ni bil poslan.")
-            napake.append(f"Email za {uporabnik['email']} ni bil poslan.")
+            logger.error(f"Email za {u['email']} ni bil poslan.")
+    logger.info(f"Paket {paket}: poslanih {poslanih} emailov.")
+    return poslanih
 
-    # Označi kot poslano šele po vseh uporabnikih,
-    # da isto naročilo dobijo vsi relevantni uporabniki
-    if poslanih_narocil:
-        db.oznaci_kot_poslano(list(poslanih_narocil))
 
-    # 5. Summary v log + dnevni povzetek adminu na email
-    logger.info("=== Summary dnevnega joba ===")
-    logger.info(f"Uporabnikov:        {len(uporabniki)}")
-    logger.info(f"Poslanih emailov:   {poslanih_emailov}")
-    logger.info(f"Preskočenih:        {preskocenih}")
-    logger.info(f"Naročil v emailih:  {len(poslanih_narocil)}")
-    logger.info(f"Pobranih z virov:   {scraped} (novih: {novih})")
-    logger.info(f"Napak:              {len(napake)}")
+# ---------------------------------------------------------------------------
+# Zagnani joby (po urniku)
+# ---------------------------------------------------------------------------
 
-    emailer.pošlji_dnevni_povzetek({
-        "scraped": scraped,
-        "novih": novih,
-        "poslanih_emailov": poslanih_emailov,
-        "preskocenih": preskocenih,
-        "napake": napake,
-    })
+def urni_job():
+    """Vsako uro: scrape -> match -> pošlji Business (real-time)."""
+    logger.info("=== Urni job ===")
+    try:
+        scrape_nova()
+        pozeni_matching()
+        poslji_paketu("business")
+    except Exception as e:
+        logger.exception("Urni job je padel.")
+        emailer.pošlji_alert_adminu("Urni job napaka", str(e))
+
+
+def dnevni_job():
+    """Vsak dan 07:00: pošlji Pro + dnevni povzetek adminu."""
+    logger.info("=== Dnevni job (Pro) ===")
+    try:
+        poslanih = poslji_paketu("pro")
+        emailer.pošlji_admin_heartbeat(db.statistika(), poslanih)
+    except Exception as e:
+        logger.exception("Dnevni job je padel.")
+        emailer.pošlji_alert_adminu("Dnevni job napaka", str(e))
+
+
+def tedenski_job():
+    """Ponedeljek 07:00: pošlji Osnovni (tedensko)."""
+    logger.info("=== Tedenski job (Osnovni) ===")
+    try:
+        poslji_paketu("osnovni")
+    except Exception as e:
+        logger.exception("Tedenski job je padel.")
+        emailer.pošlji_alert_adminu("Tedenski job napaka", str(e))
 
 
 def zazeni_scheduler():
-    """Inicializira bazo in zažene scheduler — dnevni job vsak dan ob 06:00."""
+    """Inicializira bazo in zažene scheduler s frekvencami po paketu."""
     db.init_db()
-    schedule.every().day.at("06:00").do(dnevni_job)
-    logger.info("Scheduler zagnan — dnevni job ob 06:00. Čakam...")
-
+    schedule.every().hour.at(":05").do(urni_job)
+    schedule.every().day.at("07:00").do(dnevni_job)
+    schedule.every().monday.at("07:00").do(tedenski_job)
+    logger.info(
+        "Scheduler zagnan (TZ=%s): urni scrape+match+Business, dnevni 07:00 Pro, "
+        "ponedeljek 07:00 Osnovni. Čakam...", config.TIMEZONE
+    )
     while True:
         schedule.run_pending()
-        time.sleep(60)
+        time.sleep(30)
 
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    # Dry-run: emaili gredo v datoteko (emailer.DRY_RUN_FILE) namesto na Resend
     if "--dry-run" in sys.argv:
         emailer.DRY_RUN = True
-        logger.info(f"DRY-RUN mode: emaili se zapisujejo v {emailer.DRY_RUN_FILE}")
+        logger.info(f"DRY-RUN: emaili se zapisujejo v {emailer.DRY_RUN_FILE}")
 
     if "--test" in sys.argv:
-        # Testni zagon — požene job takoj enkrat
-        dnevni_job()
+        urni_job()
+    elif "--match" in sys.argv:
+        db.init_db()
+        print(pozeni_matching())
+    elif "--send" in sys.argv:
+        paket = sys.argv[sys.argv.index("--send") + 1]
+        db.init_db()
+        print(f"Poslanih: {poslji_paketu(paket)}")
     elif "--server" in sys.argv:
-        # Samo Flask API strežnik
-        import config
         from server import app
         db.init_db()
         app.run(host="0.0.0.0", port=config.PORT)
     else:
-        # Privzeto: scheduler v neskončni zanki
         zazeni_scheduler()
