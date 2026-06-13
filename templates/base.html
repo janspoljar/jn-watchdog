@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block naslov %}Lovec — alerti o javnih naročilih{% endblock %}</title>
+    <meta name="description" content="Nikoli več zamujenega razpisa. Lovec vsak dan spremlja javna naročila in vam pošlje le tista, ki ustrezajo vaši dejavnosti.">
+    <style>
+        :root {
+            --modra: #1a73e8;
+            --temna: #1a1a2e;
+            --siva: #5a6072;
+            --svetla: #f5f7fb;
+            --rob: #e3e8f0;
+            --uspeh: #1e8e3e;
+            --rdeca: #d93025;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+            margin: 0; color: var(--temna); line-height: 1.6;
+            background: #fff;
+        }
+        a { color: var(--modra); }
+        .ovoj { max-width: 960px; margin: 0 auto; padding: 0 20px; }
+        header {
+            border-bottom: 1px solid var(--rob); background: #fff;
+            position: sticky; top: 0; z-index: 10;
+        }
+        header .ovoj {
+            display: flex; align-items: center; justify-content: space-between;
+            padding-top: 16px; padding-bottom: 16px;
+        }
+        .logo { font-weight: 800; font-size: 20px; color: var(--temna); text-decoration: none; }
+        .logo span { color: var(--modra); }
+        nav a { margin-left: 20px; text-decoration: none; font-weight: 600; font-size: 15px; }
+        .gumb {
+            display: inline-block; background: var(--modra); color: #fff;
+            padding: 13px 26px; border-radius: 8px; text-decoration: none;
+            font-weight: 700; border: none; cursor: pointer; font-size: 16px;
+        }
+        .gumb:hover { background: #155ab6; }
+        .gumb-obroba {
+            background: #fff; color: var(--modra); border: 2px solid var(--modra);
+        }
+        main { padding: 48px 0; }
+        h1 { font-size: 38px; line-height: 1.2; margin: 0 0 16px; }
+        h2 { font-size: 28px; margin: 48px 0 16px; }
+        .vodilo { font-size: 19px; color: var(--siva); max-width: 640px; }
+        .koraki { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 24px; }
+        .korak { background: var(--svetla); padding: 24px; border-radius: 12px; }
+        .korak .num {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 36px; height: 36px; border-radius: 50%; background: var(--modra);
+            color: #fff; font-weight: 700; margin-bottom: 12px;
+        }
+        .paketi { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 24px; }
+        .paket {
+            border: 1px solid var(--rob); border-radius: 12px; padding: 28px 24px;
+            display: flex; flex-direction: column;
+        }
+        .paket.izpostavljen { border: 2px solid var(--modra); box-shadow: 0 8px 30px rgba(26,115,232,.12); }
+        .paket .znacka {
+            align-self: flex-start; background: var(--modra); color: #fff;
+            font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 20px; margin-bottom: 12px;
+        }
+        .paket h3 { margin: 0 0 4px; font-size: 22px; }
+        .cena { font-size: 34px; font-weight: 800; }
+        .cena small { font-size: 16px; font-weight: 500; color: var(--siva); }
+        .paket ul { list-style: none; padding: 0; margin: 16px 0 24px; }
+        .paket li { padding: 6px 0 6px 26px; position: relative; }
+        .paket li:before { content: "✓"; position: absolute; left: 0; color: var(--uspeh); font-weight: 700; }
+        .paket .gumb { margin-top: auto; text-align: center; }
+        form .polje { margin-bottom: 20px; }
+        label { display: block; font-weight: 600; margin-bottom: 6px; }
+        input[type=email], input[type=text], select, textarea {
+            width: 100%; padding: 12px; border: 1px solid var(--rob); border-radius: 8px;
+            font-size: 16px; font-family: inherit;
+        }
+        textarea { min-height: 90px; resize: vertical; }
+        .chipi { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+        .chip {
+            display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px;
+            border: 1px solid var(--rob); border-radius: 20px; cursor: pointer; font-size: 14px;
+            user-select: none; background: #fff;
+        }
+        .chip input { margin: 0; }
+        .chip:has(input:checked) { border-color: var(--modra); background: #eef4ff; color: var(--modra); font-weight: 600; }
+        .opozorilo { background: #fdeded; color: var(--rdeca); padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; }
+        .obvestilo { background: #e8f4ea; color: var(--uspeh); padding: 16px; border-radius: 8px; }
+        .kartica { background: var(--svetla); border-radius: 12px; padding: 28px; }
+        .sredina { text-align: center; }
+        .drobno { font-size: 14px; color: var(--siva); }
+        footer { border-top: 1px solid var(--rob); padding: 28px 0; color: var(--siva); font-size: 14px; margin-top: 48px; }
+        footer a { margin-right: 16px; }
+        @media (max-width: 720px) {
+            h1 { font-size: 30px; }
+            .koraki, .paketi { grid-template-columns: 1fr; }
+            nav a { margin-left: 12px; font-size: 14px; }
+            header .ovoj { flex-wrap: wrap; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="ovoj">
+            <a href="/" class="logo">Lovec<span>.</span></a>
+            <nav>
+                <a href="/pregled">Brezplačni pregled</a>
+                <a href="/registracija" class="gumb" style="padding:9px 18px;">Začni</a>
+            </nav>
+        </div>
+    </header>
+    <main>
+        <div class="ovoj">
+            {% block vsebina %}{% endblock %}
+        </div>
+    </main>
+    <footer>
+        <div class="ovoj">
+            <a href="/">Domov</a>
+            <a href="/pregled">Brezplačni pregled</a>
+            <a href="/registracija">Registracija</a>
+            <a href="/zasebnost">Zasebnost</a>
+            <p class="drobno" style="margin-top:12px;">© Lovec — alerti o javnih naročilih. Podatki z ejn.gov.si.</p>
+        </div>
+    </footer>
+</body>
+</html>

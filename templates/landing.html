@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block vsebina %}
+<section>
+    <h1>Nikoli več zamujenega razpisa.</h1>
+    <p class="vodilo">
+        Lovec vsak dan spremlja javna naročila na portalu ejn.gov.si in vam
+        pošlje le tista, ki ustrezajo vaši dejavnosti. Brez ročnega iskanja,
+        brez zamujenih rokov.
+    </p>
+    <p style="margin-top:28px;">
+        <a href="/pregled" class="gumb">Brezplačni pregled zadnjih 30 dni</a>
+        <a href="/registracija" class="gumb gumb-obroba" style="margin-left:8px;">Začni z beto</a>
+    </p>
+    <p class="drobno" style="margin-top:12px;">Brezplačno · brez kartice · v 2 minutah</p>
+</section>
+
+<section>
+    <h2>Kako deluje</h2>
+    <div class="koraki">
+        <div class="korak">
+            <div class="num">1</div>
+            <h3>Opišete dejavnost</h3>
+            <p>Izberete svojo panogo in odkljukate vse, kar počnete — od novogradenj
+            do notranjih del. Bolj natančno kot opišete, manj boste zamudili.</p>
+        </div>
+        <div class="korak">
+            <div class="num">2</div>
+            <h3>Lovec išče namesto vas</h3>
+            <p>Vsak dan pregledamo nova javna naročila in jih primerjamo z vašim
+            profilom. Relevantna zberemo, ostala odvržemo.</p>
+        </div>
+        <div class="korak">
+            <div class="num">3</div>
+            <h3>Dobite obvestilo</h3>
+            <p>Na email prejmete le naročila, ki so za vas — z jasno označenim
+            rokom oddaje. Pravočasno, da se lahko prijavite.</p>
+        </div>
+    </div>
+</section>
+
+<section>
+    <h2>Paketi</h2>
+    <p class="vodilo">Izberite frekvenco, ki ustreza vašemu poslu. Med beta fazo je vse brezplačno.</p>
+    <div class="paketi">
+        {% for p in paketi %}
+        <div class="paket {% if p.izpostavljen %}izpostavljen{% endif %}">
+            {% if p.izpostavljen %}<span class="znacka">Najbolj priljubljen</span>{% endif %}
+            <h3>{{ p.ime }}</h3>
+            <div class="cena">{{ p.cena }}<small>{{ p.obdobje }}</small></div>
+            <p class="drobno">{{ p.frekvenca }} · {{ p.profili }}</p>
+            <ul>
+                {% for z in p.znacilnosti %}<li>{{ z }}</li>{% endfor %}
+            </ul>
+            <a href="/registracija?paket={{ p.key }}" class="gumb {% if not p.izpostavljen %}gumb-obroba{% endif %}">
+                Začni brezplačno beta
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+    <p class="drobno" style="margin-top:16px;">
+        Cene veljajo po beta fazi. Beta uporabniki bodo o prehodu na plačljivo
+        naročnino pravočasno obveščeni in nezavezujoče.
+    </p>
+</section>
+
+<section class="kartica sredina" style="margin-top:48px;">
+    <h2 style="margin-top:0;">Preverite, kaj ste zamudili zadnji mesec</h2>
+    <p class="vodilo" style="margin:0 auto 20px;">
+        Vpišite svojo dejavnost in v nekaj sekundah na email prejmete pregled
+        javnih naročil zadnjih 30 dni, ki bi bila za vas.
+    </p>
+    <a href="/pregled" class="gumb">Naredi brezplačni pregled</a>
+</section>
+{% endblock %}

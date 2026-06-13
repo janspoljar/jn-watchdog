@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block naslov %}Brezplačni pregled — Lovec{% endblock %}
+
+{% block vsebina %}
+<h1>Brezplačni pregled</h1>
+<p class="vodilo">
+    Izberite svojo panogo in odkljukate vse, kar počnete. Na email vam pošljemo
+    javna naročila zadnjih 30 dni, ki bi bila za vas — brezplačno.
+</p>
+
+{% if napaka %}<div class="opozorilo">{{ napaka }}</div>{% endif %}
+
+<form method="post" action="/pregled" style="margin-top:24px; max-width:680px;">
+    <div class="polje">
+        <label for="panoga">Vaša glavna panoga</label>
+        <select name="panoga" id="panoga" required>
+            <option value="" disabled {% if not panoga %}selected{% endif %}>— izberite panogo —</option>
+            {% for kljuc, p in panoge.items() %}
+            <option value="{{ kljuc }}" {% if panoga == kljuc %}selected{% endif %}>{{ p.ikona }} {{ p.ime }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="polje">
+        <label>Kaj vse počnete? <span class="drobno">(odkljukate vse, kar velja)</span></label>
+        {% for kljuc, p in panoge.items() %}
+        <div class="chipi predlogi" data-panoga="{{ kljuc }}" style="display:none;">
+            {% if p.predlogi %}
+                {% for pred in p.predlogi %}
+                <label class="chip"><input type="checkbox" name="izbrani" value="{{ pred.label }}"> {{ pred.label }}</label>
+                {% endfor %}
+            {% else %}
+                <p class="drobno">Opišite svojo dejavnost spodaj v polju.</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+        <p class="drobno" id="namig" style="margin-top:8px;">Najprej izberite panogo zgoraj.</p>
+    </div>
+
+    <div class="polje">
+        <label for="opis">Še karkoli dodatnega? <span class="drobno">(neobvezno)</span></label>
+        <textarea name="opis" id="opis" placeholder="Npr. specializirani smo tudi za sanacije fasad in vgrajene inštalacije v javnih ustanovah ...">{{ opis or "" }}</textarea>
+    </div>
+
+    <div class="polje">
+        <label for="email">Vaš email</label>
+        <input type="email" name="email" id="email" value="{{ email or '' }}" placeholder="ime@podjetje.si" required>
+    </div>
+
+    <button type="submit" class="gumb">Pošlji mi brezplačni pregled</button>
+    <p class="drobno" style="margin-top:10px;">Z oddajo se strinjate s <a href="/zasebnost">politiko zasebnosti</a>.</p>
+</form>
+
+<script>
+    (function () {
+        var izbira = document.getElementById('panoga');
+        var skupine = document.querySelectorAll('.predlogi');
+        var namig = document.getElementById('namig');
+        function osvezi() {
+            var izbran = izbira.value;
+            skupine.forEach(function (s) {
+                s.style.display = (s.dataset.panoga === izbran) ? 'flex' : 'none';
+            });
+            namig.style.display = izbran ? 'none' : 'block';
+        }
+        izbira.addEventListener('change', osvezi);
+        osvezi();
+    })();
+</script>
+{% endblock %}

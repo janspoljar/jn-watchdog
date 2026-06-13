@@ -119,12 +119,12 @@ def _sestavi_html(uporabnik_email: str, narocila: list) -> str:
             """
         html += "</table>"
 
-    # Footer z odjava linkom
+    # Footer z odjava linkom (GDPR — unsubscribe v vsakem emailu)
     html += f"""
         <hr style="margin-top: 32px; border: none; border-top: 1px solid #ddd;">
         <p style="font-size: 12px; color: #999;">
-            Prejemate ta email, ker ste naročeni na JN Watchdog.<br>
-            <a href="https://tvojadomena.si/odjava?email={uporabnik_email}" style="color: #999;">Odjava od obvestil</a>
+            Prejemate ta email, ker ste naročeni na Lovec — alerte o javnih naročilih.<br>
+            <a href="{config.BASE_URL}/odjava?email={uporabnik_email}" style="color: #999;">Odjava od obvestil</a>
         </p>
     </body>
     </html>
@@ -229,6 +229,57 @@ def pošlji_dnevni_povzetek(stats: dict) -> bool:
         "</body></html>"
     )
     return _pošlji_admin(f"Lovec povzetek {danes}: {stats.get('poslanih_emailov', 0)} emailov, {len(napake)} napak", html)
+
+
+def _poslji_html(prejemnik: str, zadeva: str, html: str) -> bool:
+    """Splošno pošiljanje HTML emaila prek Resend (spoštuje DRY_RUN)."""
+    if DRY_RUN:
+        _zapisi_dry_run(prejemnik, zadeva, html)
+        return True
+    try:
+        resend.Emails.send({
+            "from": config.FROM_EMAIL,
+            "to": prejemnik,
+            "subject": zadeva,
+            "html": html,
+        })
+        logger.info(f"Email poslan na {prejemnik}: {zadeva}")
+        return True
+    except Exception as e:
+        logger.error(f"Napaka pri pošiljanju emaila na {prejemnik}: {e}")
+        return False
+
+
+def pošlji_pregled(email: str, html: str, stevilo: int) -> bool:
+    """Pošlje HTML poročilo brezplačnega pregleda (lead magnet)."""
+    zadeva = (
+        f"Vaš brezplačni pregled: {stevilo} javnih naročil"
+        if stevilo else "Vaš brezplačni pregled javnih naročil"
+    )
+    return _poslji_html(email, zadeva, html)
+
+
+def pošlji_potrditev(email: str, potrditveni_url: str) -> bool:
+    """
+    Pošlje email z linkom za potrditev prijave (double opt-in).
+    """
+    html = (
+        "<html><body style='font-family: Arial, sans-serif; max-width: 640px; "
+        "margin: 0 auto; padding: 20px; color: #333;'>"
+        "<h2 style='color: #1a1a2e;'>Potrdite svojo prijavo</h2>"
+        "<p>Hvala za prijavo na <strong>Lovec</strong> — alerte o javnih naročilih.</p>"
+        "<p>Za zaključek prijave kliknite spodnji gumb:</p>"
+        f"<p style='margin: 28px 0;'><a href='{potrditveni_url}' "
+        "style='background: #1a73e8; color: #fff; padding: 12px 24px; "
+        "border-radius: 6px; text-decoration: none; font-weight: bold;'>"
+        "Potrdi prijavo</a></p>"
+        "<p style='font-size: 13px; color: #666;'>Če gumb ne deluje, kopirajte to povezavo v brskalnik:<br>"
+        f"<span style='color: #1a73e8;'>{potrditveni_url}</span></p>"
+        "<hr style='margin-top: 32px; border: none; border-top: 1px solid #ddd;'>"
+        "<p style='font-size: 12px; color: #999;'>Če se niste prijavili vi, ta email preprosto prezrite.</p>"
+        "</body></html>"
+    )
+    return _poslji_html(email, "Potrdite prijavo na Lovec", html)
 
 
 def pošlji_test_email(email: str) -> bool:

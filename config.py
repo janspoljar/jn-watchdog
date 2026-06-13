@@ -13,9 +13,13 @@ RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 STRIPE_PRICE_ID = os.getenv("STRIPE_PRICE_ID")
-FROM_EMAIL = os.getenv("FROM_EMAIL", "narocila@tvojadomena.si")
+FROM_EMAIL = os.getenv("FROM_EMAIL", "narocila@javna-narocila.si")
 DB_PATH = os.getenv("DB_PATH", "narocila.db")
 PORT = int(os.getenv("PORT", 5000))
+
+# Javni naslov aplikacije — za gradnjo linkov v emailih (potrditev, odjava)
+# in Stripe success/cancel URL. Brez končne poševnice.
+BASE_URL = os.getenv("BASE_URL", "https://javna-narocila.si").rstrip("/")
 
 # Admin email — prejema alerte ob napakah in dnevni povzetek joba
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "jan.spoljar@gmail.com")

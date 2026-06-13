@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block naslov %}Potrditev — Lovec{% endblock %}
+
+{% block vsebina %}
+<div class="kartica sredina" style="max-width:640px; margin:0 auto;">
+    {% if uspeh %}
+    <h1 style="margin-top:0;">Prijava potrjena ✓</h1>
+    <p class="vodilo" style="margin:0 auto 8px;">
+        Vaš email je potrjen in profil je aktiven. Od zdaj naprej vas Lovec
+        obvešča o javnih naročilih, ki ustrezajo vaši dejavnosti.
+    </p>
+    <p style="margin-top:24px;"><a href="/" class="gumb">Nazaj na domačo stran</a></p>
+    {% else %}
+    <h1 style="margin-top:0;">Povezava ni veljavna</h1>
+    <p class="vodilo" style="margin:0 auto 8px;">
+        Ta potrditvena povezava je neveljavna ali že uporabljena. Poskusite se
+        znova prijaviti.
+    </p>
+    <p style="margin-top:24px;"><a href="/registracija" class="gumb">Ponovna registracija</a></p>
+    {% endif %}
+</div>
+{% endblock %}

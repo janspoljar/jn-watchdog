@@ -6,7 +6,7 @@ Vse operacije z naročili, uporabniki in email logi.
 import sqlite3
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from config import DB_PATH
 
 logger = logging.getLogger(__name__)
@@ -85,9 +85,48 @@ def init_db():
         )
     """)
 
+    # Tabela leadov (Faza 4) — vpisi iz brezplačnega pregleda (lead magnet).
+    # Lead še ni naročnik; hranimo email + profil dejavnosti za nadaljnji kontakt.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS leads (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            email     TEXT    NOT NULL,
+            panoga    TEXT,
+            opis      TEXT,
+            izbrani   TEXT,
+            vir       TEXT,
+            datum     TEXT
+        )
+    """)
+
+    conn.commit()
+
+    # Migracije obstoječih tabel (idempotentno) — dodaj manjkajoče stolpce.
+    _migriraj_uporabnike(conn)
+
     conn.commit()
     conn.close()
     logger.info("Baza inicializirana.")
+
+
+def _migriraj_uporabnike(conn):
+    """
+    Idempotentno doda stolpce na tabelo uporabniki, ki so prišli v Fazi 4:
+    panoga, opis (profil dejavnosti), paket, double opt-in (potrditveni_token,
+    potrjen). Varno za večkratni klic — preskoči obstoječe stolpce.
+    """
+    obstojeci = {vrstica[1] for vrstica in conn.execute("PRAGMA table_info(uporabniki)")}
+    novi_stolpci = {
+        "panoga": "TEXT",
+        "opis": "TEXT",
+        "paket": "TEXT",
+        "potrditveni_token": "TEXT",
+        "potrjen": "INTEGER NOT NULL DEFAULT 0",
+    }
+    for ime, tip in novi_stolpci.items():
+        if ime not in obstojeci:
+            conn.execute(f"ALTER TABLE uporabniki ADD COLUMN {ime} {tip}")
+            logger.info(f"Migracija: dodan stolpec uporabniki.{ime}")
 
 
 # ---------------------------------------------------------------------------
@@ -174,6 +213,26 @@ def poberi_nova_narocila(kategorije_filter: list) -> list:
             ujemanja.append(n)
 
     return ujemanja
+
+
+def poberi_narocila_zadnjih_dni(dni: int = 30) -> list:
+    """
+    Vrne naročila, scrapana v zadnjih `dni` dneh (po datum_scrape, ISO format).
+    Uporablja se za brezplačni pregled (lead magnet) — "zamujena naročila".
+
+    Returns:
+        Seznam slovarjev z naročili, najnovejša najprej.
+    """
+    meja = (datetime.now() - timedelta(days=dni)).isoformat()
+    conn = _poveži()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT * FROM narocila WHERE datum_scrape >= ? ORDER BY datum_scrape DESC",
+        (meja,),
+    )
+    vrstice = [dict(row) for row in cur.fetchall()]
+    conn.close()
+    return vrstice
 
 
 def oznaci_kot_poslano(pjn_lista: list):
@@ -344,6 +403,121 @@ def shrani_email_log(uporabnik_id: int, stevilo: int):
     conn.commit()
     conn.close()
     logger.info(f"Email log shranjen za uporabnik_id={uporabnik_id}, naročil={stevilo}.")
+
+
+# ---------------------------------------------------------------------------
+# Leadi (Faza 4) — brezplačni pregled
+# ---------------------------------------------------------------------------
+
+def shrani_lead(email: str, panoga: str, opis: str, izbrani: list, vir: str = "pregled") -> int:
+    """
+    Shrani lead iz brezplačnega pregleda. Vrne ID vstavljenega leada.
+
+    Args:
+        email:   email naslov leada.
+        panoga:  ključ izbrane panoge (npr. "gradbenistvo").
+        opis:    prosto besedilo dejavnosti.
+        izbrani: seznam izbranih podpodročij (labelov).
+        vir:     izvor leada (privzeto "pregled").
+    """
+    conn = _poveži()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO leads (email, panoga, opis, izbrani, vir, datum)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (
+        email,
+        panoga,
+        opis,
+        json.dumps(izbrani, ensure_ascii=False),
+        vir,
+        datetime.now().isoformat(),
+    ))
+    conn.commit()
+    lead_id = cur.lastrowid
+    conn.close()
+    logger.info(f"Shranjen lead: {email} (panoga={panoga}).")
+    return lead_id
+
+
+# ---------------------------------------------------------------------------
+# Registracija z double opt-in (Faza 4)
+# ---------------------------------------------------------------------------
+
+def registriraj_uporabnika(
+    email: str, panoga: str, opis: str, paket: str,
+    kategorije: list, token: str,
+) -> bool:
+    """
+    Vstavi/posodobi uporabnika za beta registracijo z double opt-in.
+    Uporabnik je aktiven=0 in potrjen=0, dokler ne klikne potrditvenega linka.
+
+    Če email že obstaja, posodobi profil in token (npr. ponovna prijava
+    pred potrditvijo). Vrne True ob uspehu.
+    """
+    conn = _poveži()
+    cur = conn.cursor()
+    kategorije_json = json.dumps(kategorije, ensure_ascii=False)
+    try:
+        cur.execute("SELECT id FROM uporabniki WHERE email = ?", (email,))
+        obstojec = cur.fetchone()
+        if obstojec:
+            cur.execute("""
+                UPDATE uporabniki
+                SET panoga = ?, opis = ?, paket = ?, kategorije = ?,
+                    potrditveni_token = ?, potrjen = 0
+                WHERE email = ?
+            """, (panoga, opis, paket, kategorije_json, token, email))
+        else:
+            cur.execute("""
+                INSERT INTO uporabniki
+                    (email, kategorije, aktiven, datum_registracije,
+                     panoga, opis, paket, potrditveni_token, potrjen)
+                VALUES (?, ?, 0, ?, ?, ?, ?, ?, 0)
+            """, (
+                email, kategorije_json, datetime.now().isoformat(),
+                panoga, opis, paket, token,
+            ))
+        conn.commit()
+        uspelo = True
+    except sqlite3.Error as e:
+        logger.error(f"Napaka pri registraciji {email}: {e}")
+        uspelo = False
+    finally:
+        conn.close()
+    if uspelo:
+        logger.info(f"Registracija (čaka potrditev): {email}")
+    return uspelo
+
+
+def potrdi_uporabnika(token: str) -> str | None:
+    """
+    Potrdi email prek opt-in tokena: nastavi potrjen=1 in aktiven=1
+    (beta — brez plačila se uporabnik aktivira ob potrditvi).
+
+    Returns:
+        Email potrjenega uporabnika ob uspehu, sicer None (neveljaven token).
+    """
+    if not token:
+        return None
+    conn = _poveži()
+    cur = conn.cursor()
+    cur.execute("SELECT email FROM uporabniki WHERE potrditveni_token = ?", (token,))
+    vrstica = cur.fetchone()
+    if not vrstica:
+        conn.close()
+        logger.warning("Potrditev z neveljavnim tokenom.")
+        return None
+    email = vrstica[0]
+    cur.execute("""
+        UPDATE uporabniki
+        SET potrjen = 1, aktiven = 1, potrditveni_token = NULL
+        WHERE potrditveni_token = ?
+    """, (token,))
+    conn.commit()
+    conn.close()
+    logger.info(f"Email potrjen, uporabnik aktiviran (beta): {email}")
+    return email
 
 
 # ---------------------------------------------------------------------------

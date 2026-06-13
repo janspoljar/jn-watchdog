@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block naslov %}Odjava — Lovec{% endblock %}
+
+{% block vsebina %}
+<div class="kartica sredina" style="max-width:640px; margin:0 auto;">
+    <h1 style="margin-top:0;">Uspešno odjavljeni</h1>
+    {% if email %}
+    <p class="vodilo" style="margin:0 auto;">
+        Naslov <strong>{{ email }}</strong> ne bo več prejemal obvestil Lovca.
+        Žal nam je, da odhajate.
+    </p>
+    {% else %}
+    <p class="vodilo" style="margin:0 auto;">Odjava je zaključena.</p>
+    {% endif %}
+    <p style="margin-top:24px;"><a href="/" class="gumb gumb-obroba">Nazaj na domačo stran</a></p>
+</div>
+{% endblock %}

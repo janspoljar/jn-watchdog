@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block naslov %}Potrdite email — Lovec{% endblock %}
+
+{% block vsebina %}
+<div class="kartica sredina" style="max-width:640px; margin:0 auto;">
+    <h1 style="margin-top:0;">Še en korak ✉️</h1>
+    <p class="vodilo" style="margin:0 auto 8px;">
+        Na <strong>{{ email }}</strong> smo poslali email za potrditev prijave.
+        Kliknite gumb v emailu in alerti začnejo prihajati.
+    </p>
+    <p class="drobno">
+        Emaila ne vidite? Preverite mapo z neželeno pošto ali počakajte nekaj minut.
+    </p>
+</div>
+{% endblock %}
