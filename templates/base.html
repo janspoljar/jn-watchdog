@@ -245,8 +245,13 @@
             <nav>
                 <a href="/#kako" class="tekst">Kako deluje</a>
                 <a href="/#cenik" class="tekst">Cenik</a>
+                {% if session.uid %}
+                <a href="/racun" class="tekst">Moj račun</a>
+                <a href="/odjava-seje" class="gumb mini obroba">Odjava</a>
+                {% else %}
                 <a href="/prijava" class="tekst">Prijava</a>
                 <a href="/registracija" class="gumb mini">Začni</a>
+                {% endif %}
             </nav>
         </div>
     </header>

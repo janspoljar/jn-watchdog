@@ -45,7 +45,7 @@ EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 # Paketi (prikaz na strani; plačila pridejo v Fazi 5 — zdaj brezplačna beta)
 PAKETI = [
     {
-        "key": "osnovni", "ime": "Osnovni", "cena": "29 €", "obdobje": "/mesec",
+        "key": "osnovni", "ime": "Osnovni", "cena": "14 €", "obdobje": "/mesec",
         "frekvenca": "Tedenski email (ob ponedeljkih)",
         "profili": "1 profil dejavnosti",
         "znacilnosti": [
@@ -55,7 +55,7 @@ PAKETI = [
         ],
     },
     {
-        "key": "pro", "ime": "Pro", "cena": "59 €", "obdobje": "/mesec",
+        "key": "pro", "ime": "Pro", "cena": "29 €", "obdobje": "/mesec",
         "frekvenca": "Dnevni alerti",
         "profili": "3 profili dejavnosti",
         "izpostavljen": True,
@@ -66,7 +66,7 @@ PAKETI = [
         ],
     },
     {
-        "key": "business", "ime": "Business", "cena": "119 €", "obdobje": "/mesec",
+        "key": "business", "ime": "Business", "cena": "59 €", "obdobje": "/mesec",
         "frekvenca": "Sprotno obveščanje (v realnem času)",
         "profili": "Neomejeno profilov",
         "znacilnosti": [
